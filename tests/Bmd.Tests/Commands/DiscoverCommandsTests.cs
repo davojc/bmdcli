@@ -321,16 +321,34 @@ public class DiscoverCommandsTests : IDisposable
     }
 
     [Fact]
-    public async Task Add_NoSupportedDevices_Exit0_HelpfulNote_NothingWritten()
+    public async Task Add_NothingAnsweredAtAll_Exit0_HelpfulNote_NothingWritten()
     {
         // Nothing to add is decided before the interactive guard, so this must not need stdin
         // at all — an empty SetIn would still make the point, but omitting it entirely shows
         // the command never even tries to read a line.
-        Assert.Equal(0, await Commands([Unsupported], interactive: false).Discover(add: true));
+        Assert.Equal(0, await Commands([], interactive: false).Discover(add: true));
         Assert.Equal("", _stdout.ToString());
         var err = _stderr.ToString();
         Assert.Contains("mDNS", err);
         Assert.Contains("subnet", err);
+        Assert.DoesNotContain("Select a device", err);
+        Assert.False(File.Exists(LocalConfigPath));
+    }
+
+    [Fact]
+    public async Task Add_DevicesAnsweredButNoneRecognized_DistinctNoteOnStderr_Exit0_NothingWritten()
+    {
+        // Mirrors Discover_DevicesAnsweredButNoneRecognized_DistinctNoteOnStderr_Exit0 for the
+        // --add flow: a device answered but bmd doesn't recognize its type, so there is nothing
+        // to add, but "No devices found" would be actively misleading — something IS on the
+        // network. --add can't be combined with --all, so this is the one spot a user in this
+        // exact situation is stuck without --add's own guidance pointing them at --all.
+        Assert.Equal(0, await Commands([Unsupported], interactive: false).Discover(add: true));
+        Assert.Equal("", _stdout.ToString());
+        var err = _stderr.ToString();
+        Assert.DoesNotContain("No devices found", err);
+        Assert.Contains("1 device", err);
+        Assert.Contains("bmd discover --all", err);
         Assert.DoesNotContain("Select a device", err);
         Assert.False(File.Exists(LocalConfigPath));
     }

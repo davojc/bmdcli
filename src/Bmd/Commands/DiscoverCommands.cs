@@ -89,7 +89,7 @@ public class DiscoverCommands
             .ToArray();
 
         if (add)
-            return AddSelected(shown, global, json);
+            return AddSelected(devices.Count, shown, global, json);
 
         if (json)
         {
@@ -102,7 +102,7 @@ public class DiscoverCommands
 
         if (shown.Length == 0)
         {
-            Console.Error.WriteLine(devices.Count > 0 ? DevicesAnsweredButNoneRecognizedMessage(devices.Count) : NoDevicesFoundMessage);
+            Console.Error.WriteLine(EmptyResultMessage(devices.Count));
             return 0;
         }
 
@@ -116,24 +116,31 @@ public class DiscoverCommands
         "devices predate mDNS support entirely — if yours isn't showing up, configure it directly " +
         "with `bmd config set videohub.host <address>`.";
 
-    /// <summary>Shown instead of <see cref="NoDevicesFoundMessage"/> when devices actually
-    /// answered but none was a recognized bmd device type — "No devices found" would be
-    /// actively misleading here, since something is in fact on the network.</summary>
-    static string DevicesAnsweredButNoneRecognizedMessage(int count) =>
-        $"{count} device{(count == 1 ? "" : "s")} answered but none is a type bmd recognizes — " +
-        "run `bmd discover --all` to see them.";
+    /// <summary>The stderr note for an empty result, shared by the plain listing and `--add`
+    /// (which is why it lives here rather than being duplicated in <see cref="AddSelected"/>):
+    /// plain <see cref="NoDevicesFoundMessage"/> when literally nothing answered, or a distinct
+    /// note when <paramref name="devicesAnswered"/> devices answered but none was a recognized
+    /// bmd device type — "No devices found" would be actively misleading in that case, since
+    /// something is in fact on the network.</summary>
+    static string EmptyResultMessage(int devicesAnswered) =>
+        devicesAnswered == 0
+            ? NoDevicesFoundMessage
+            : $"{devicesAnswered} device{(devicesAnswered == 1 ? "" : "s")} answered but none is a type bmd recognizes — " +
+              "run `bmd discover --all` to see them.";
 
     /// <summary>The interactive `--add` flow: list the supported candidates, ask which one to
     /// keep, and write its address (and non-default port) into config. `shown` is already
     /// filtered to devices with a recognized <see cref="DiscoveredDevice.DeviceType"/> — callers
-    /// reject `--add --all` before reaching here, so every entry's <c>DeviceType</c> is non-null.</summary>
-    int AddSelected(IReadOnlyList<DiscoveredDevice> shown, bool global, bool json)
+    /// reject `--add --all` before reaching here, so every entry's <c>DeviceType</c> is non-null.
+    /// <paramref name="devicesAnswered"/> is the unfiltered count (before that filtering), used
+    /// only to pick the right <see cref="EmptyResultMessage"/> when nothing is left to add.</summary>
+    int AddSelected(int devicesAnswered, IReadOnlyList<DiscoveredDevice> shown, bool global, bool json)
     {
         if (shown.Count == 0)
         {
             // Nothing found means nothing to add regardless of whether stdin is interactive —
             // checked before the terminal guard so this case never demands a real terminal.
-            Console.Error.WriteLine(NoDevicesFoundMessage);
+            Console.Error.WriteLine(EmptyResultMessage(devicesAnswered));
             return 0;
         }
 

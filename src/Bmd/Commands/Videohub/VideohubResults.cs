@@ -13,3 +13,7 @@ public sealed record VideohubOutputEntry(int N, string Label, int Input, string 
 /// <summary>One routed connection: an output (1-based) and the input (1-based) feeding it,
 /// with both labels.</summary>
 public sealed record VideohubRouteEntry(int Output, string OutputLabel, int Input, string InputLabel);
+
+/// <summary>Result of `videohub export`: what was captured and where it went.</summary>
+public sealed record VideohubExportResult(
+    string Device, int VideoInputs, int VideoOutputs, int Routes, string? File, bool Verified);

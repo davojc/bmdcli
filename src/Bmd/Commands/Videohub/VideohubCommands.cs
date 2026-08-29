@@ -3,6 +3,7 @@ using System.Text.Json;
 using Bmd.Config;
 using Bmd.Devices.Videohub;
 using Bmd.Output;
+using ConsoleAppFramework;
 
 namespace Bmd.Commands.Videohub;
 
@@ -104,6 +105,73 @@ public class VideohubCommands
                         [e.Output.ToString(), e.OutputLabel, e.Input.ToString(), e.InputLabel]).ToArray());
             return 0;
         });
+
+    /// <summary>Export a verified snapshot of labels and routing (1-based). Locks are not captured.</summary>
+    /// <param name="file">Destination file; omit to write the snapshot JSON to stdout.</param>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="json">Emit a summary object as JSON on stdout; requires a file.</param>
+    public async Task<int> Export(
+        [Argument] string? file = null, string? host = null, int? port = null, int? timeout = null, bool json = false)
+    {
+        if (json && file is null)
+        {
+            Console.Error.WriteLine("error: --json requires a file argument (the snapshot itself goes to stdout without it)");
+            return 2;
+        }
+
+        try
+        {
+            const int attempts = 3;
+            IReadOnlyList<string> differences = [];
+            for (var attempt = 1; attempt <= attempts; attempt++)
+            {
+                VideohubSnapshot? captured = null;
+                var capture = await WithClientAsync(host, port, timeout, client =>
+                {
+                    captured = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow);
+                    return 0;
+                });
+                if (capture != 0) return capture;
+
+                var snapshot = captured!;
+                var text = snapshot.ToJson();
+                if (file is not null) File.WriteAllText(file, text);
+
+                var written = VideohubSnapshot.FromJson(file is not null ? File.ReadAllText(file) : text);
+                var verify = await WithClientAsync(host, port, timeout, client =>
+                {
+                    differences = written.DifferencesFrom(client.State);
+                    return 0;
+                });
+                if (verify != 0) return verify;
+                if (differences.Count > 0) continue;   // device changed mid-export: recapture
+
+                if (file is null) Console.Write(text);
+                else if (json)
+                    Console.WriteLine(JsonSerializer.Serialize(
+                        new VideohubExportResult(snapshot.Device, snapshot.VideoInputs, snapshot.VideoOutputs,
+                            snapshot.Outputs.Length, file, true),
+                        BmdJsonContext.Default.VideohubExportResult));
+                else
+                    Console.WriteLine(
+                        $"Exported and verified: {snapshot.VideoInputs} inputs, {snapshot.VideoOutputs} outputs, " +
+                        $"{snapshot.Outputs.Length} routes → {file}");
+                return 0;
+            }
+
+            Console.Error.WriteLine(
+                $"error: device kept changing during export; snapshot not verified after {attempts} attempts");
+            foreach (var difference in differences) Console.Error.WriteLine($"  {difference}");
+            return 1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return 1;
+        }
+    }
 
     static string LockWord(LockState lockState) => lockState switch
     {

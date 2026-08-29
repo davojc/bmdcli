@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Bmd.Commands.Videohub;
 using Bmd.Config;
+using Bmd.Devices.Videohub;
 using Bmd.Tests.Devices.Videohub;
 
 namespace Bmd.Tests.Commands;
@@ -172,5 +173,73 @@ public class VideohubCommandsTests : IDisposable
         Assert.Contains("OUT", text);
         Assert.Contains("Program", text);
         Assert.Contains("Cam 4", text);
+    }
+
+    [Fact]
+    public async Task Export_ToFile_WritesVerifiedSnapshot()
+    {
+        await using var fake = FakeVideohub.Start();
+        var path = Path.Combine(WorkDir, "snapshot.json");
+        Assert.Equal(0, await Commands().Export(file: path, host: "127.0.0.1", port: fake.Port));
+
+        var snapshot = VideohubSnapshot.FromJson(File.ReadAllText(path));
+        Assert.Equal("Blackmagic Smart Videohub", snapshot.Device);
+        Assert.Equal(4, snapshot.Outputs.Length);
+        Assert.Equal(4, snapshot.Outputs[0].Input);
+        Assert.Contains("verified", _stdout.ToString(), StringComparison.OrdinalIgnoreCase);
+    }
+
+    [Fact]
+    public async Task Export_ToStdout_EmitsSnapshotJsonOnly()
+    {
+        await using var fake = FakeVideohub.Start();
+        Assert.Equal(0, await Commands().Export(host: "127.0.0.1", port: fake.Port));
+        var snapshot = VideohubSnapshot.FromJson(_stdout.ToString());
+        Assert.Equal(4, snapshot.Inputs.Length);
+    }
+
+    [Fact]
+    public async Task Export_Json_ReportsSummary()
+    {
+        await using var fake = FakeVideohub.Start();
+        var path = Path.Combine(WorkDir, "snapshot.json");
+        Assert.Equal(0, await Commands().Export(file: path, host: "127.0.0.1", port: fake.Port, json: true));
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        Assert.Equal("Blackmagic Smart Videohub", root.GetProperty("device").GetString());
+        Assert.Equal(4, root.GetProperty("videoInputs").GetInt32());
+        Assert.Equal(4, root.GetProperty("routes").GetInt32());
+        Assert.Equal(path, root.GetProperty("file").GetString());
+        Assert.True(root.GetProperty("verified").GetBoolean());
+    }
+
+    [Fact]
+    public async Task Export_JsonWithoutFile_Exit2()
+    {
+        await using var fake = FakeVideohub.Start();
+        Assert.Equal(2, await Commands().Export(host: "127.0.0.1", port: fake.Port, json: true));
+        Assert.Equal("", _stdout.ToString());
+        Assert.Contains("--json requires a file", _stderr.ToString());
+    }
+
+    [Fact]
+    public async Task Export_UnwritablePath_Exit1_CleanError()
+    {
+        await using var fake = FakeVideohub.Start();
+        var directoryAsFile = Path.Combine(WorkDir, "blocked");
+        Directory.CreateDirectory(directoryAsFile);
+        Assert.Equal(1, await Commands().Export(file: directoryAsFile, host: "127.0.0.1", port: fake.Port));
+        Assert.StartsWith("error:", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+    }
+
+    [Fact]
+    public async Task Export_DeviceChangesEveryAttempt_Exit1_ListsDifferences()
+    {
+        // fake serves a different route on each connection: verification can never converge
+        await using var fake = FakeVideohub.StartChanging();
+        var path = Path.Combine(WorkDir, "snapshot.json");
+        Assert.Equal(1, await Commands().Export(file: path, host: "127.0.0.1", port: fake.Port));
+        Assert.Contains("output", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
     }
 }

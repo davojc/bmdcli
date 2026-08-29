@@ -11,11 +11,11 @@ public sealed class FakeVideohub : IAsyncDisposable
     readonly TcpListener _listener;
     readonly CancellationTokenSource _cts = new();
     readonly Task _acceptLoop;
-    readonly string _dump;
+    readonly Func<string> _dump;
 
     public int Port { get; }
 
-    FakeVideohub(string dump)
+    FakeVideohub(Func<string> dump)
     {
         _dump = dump;
         _listener = new TcpListener(IPAddress.Loopback, 0);
@@ -24,7 +24,19 @@ public sealed class FakeVideohub : IAsyncDisposable
         _acceptLoop = AcceptLoopAsync();
     }
 
-    public static FakeVideohub Start(string dump = Fixtures.Dump4x4) => new(dump);
+    public static FakeVideohub Start(string dump = Fixtures.Dump4x4) => new(() => dump);
+
+    /// <summary>A hub whose output-1 route changes on every connection —
+    /// used to prove export verification retries and then fails cleanly.</summary>
+    public static FakeVideohub StartChanging()
+    {
+        var connection = 0;
+        return new FakeVideohub(() =>
+        {
+            var input = connection++ % 4;   // 0,1,2,3 → different route each connect
+            return Fixtures.Dump4x4.Replace("VIDEO OUTPUT ROUTING:\n0 3", $"VIDEO OUTPUT ROUTING:\n0 {input}");
+        });
+    }
 
     async Task AcceptLoopAsync()
     {
@@ -46,7 +58,7 @@ public sealed class FakeVideohub : IAsyncDisposable
             try
             {
                 var stream = client.GetStream();
-                await stream.WriteAsync(Encoding.UTF8.GetBytes(_dump), _cts.Token);
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(_dump()), _cts.Token);
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 while (await reader.ReadLineAsync(_cts.Token) is not null) { } // discard until disconnect
             }

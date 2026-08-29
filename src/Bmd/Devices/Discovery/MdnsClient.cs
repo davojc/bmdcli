@@ -62,6 +62,12 @@ public sealed class MdnsClient
                         udp.JoinMulticastGroup(destination.Address, localAddress);
                         udp.MulticastLoopback = false;
                         udp.Ttl = 255;
+                        // `udp.Ttl` above sets the unicast TTL only; multicast sends still leave
+                        // with the OS default IP_MULTICAST_TTL of 1 unless this is also set
+                        // explicitly. RFC 6762 §11 recommends 255 for mDNS. Set inside this same
+                        // try so a platform that rejects the option doesn't abort discovery on
+                        // this interface.
+                        udp.Client.SetSocketOption(SocketOptionLevel.IP, SocketOptionName.MulticastTimeToLive, 255);
                     }
 
                     foreach (var service in MdnsServices.All)

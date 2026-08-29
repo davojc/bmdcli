@@ -74,8 +74,15 @@ public static class DnsMessage
             pos += 4;
         }
 
-        var records = new List<DnsRecord>(anCount + nsCount + arCount);
         int total = anCount + nsCount + arCount;
+        // The header's counts are attacker-controlled and unverified at this point — a 12-byte
+        // datagram can claim ANCOUNT=NSCOUNT=ARCOUNT=0xFFFF (total 196,605) despite carrying zero
+        // record bytes. Pre-sizing the list from `total` directly would allocate a ~1.57MB backing
+        // array (straight to the LOH) before the loop below ever throws on truncation. Every
+        // record needs at least 11 bytes on the wire (a 2-byte compressed name plus TYPE(2)
+        // CLASS(2) TTL(4) RDLENGTH(2)), so the capacity actually reachable is bounded by the
+        // message length — clamp to that instead of trusting the header.
+        var records = new List<DnsRecord>(Math.Min(total, message.Length / 11));
         for (int i = 0; i < total; i++)
             records.Add(ReadRecord(message, ref pos));
 

@@ -1,3 +1,4 @@
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.Json;
 using Bmd.Config;
@@ -63,12 +64,17 @@ public class DiscoverCommands
         {
             devices = await _discover(TimeSpan.FromSeconds(resolvedTimeout), ct);
         }
-        catch (SocketException ex)
+        catch (Exception ex) when (ex is SocketException or NetworkInformationException)
         {
-            // Every interface failed to send (MdnsClient.DiscoverAsync rethrows the last such
-            // failure) — a total send failure, not "nothing answered". That distinction matters:
-            // it means the machine itself couldn't even ask, so it is reported as an error
-            // rather than folded into the ordinary "no devices found" empty-result path below.
+            // SocketException: every interface failed to send (MdnsClient.DiscoverAsync rethrows
+            // the last such failure) — a total send failure, not "nothing answered". That
+            // distinction matters: it means the machine itself couldn't even ask, so it is
+            // reported as an error rather than folded into the ordinary "no devices found"
+            // empty-result path below.
+            // NetworkInformationException: NetworkInterface.GetAllNetworkInterfaces() can fail at
+            // the OS level (it derives from Win32Exception, not SocketException, so it needs
+            // naming explicitly here) — same treatment, one clean stderr line instead of an
+            // unhandled crash with a stack trace.
             Console.Error.WriteLine($"error: {ex.Message}");
             return 1;
         }
@@ -96,7 +102,7 @@ public class DiscoverCommands
 
         if (shown.Length == 0)
         {
-            Console.Error.WriteLine(NoDevicesFoundMessage);
+            Console.Error.WriteLine(devices.Count > 0 ? DevicesAnsweredButNoneRecognizedMessage(devices.Count) : NoDevicesFoundMessage);
             return 0;
         }
 
@@ -109,6 +115,13 @@ public class DiscoverCommands
         "No devices found. mDNS discovery does not cross subnets, and some older Blackmagic " +
         "devices predate mDNS support entirely — if yours isn't showing up, configure it directly " +
         "with `bmd config set videohub.host <address>`.";
+
+    /// <summary>Shown instead of <see cref="NoDevicesFoundMessage"/> when devices actually
+    /// answered but none was a recognized bmd device type — "No devices found" would be
+    /// actively misleading here, since something is in fact on the network.</summary>
+    static string DevicesAnsweredButNoneRecognizedMessage(int count) =>
+        $"{count} device{(count == 1 ? "" : "s")} answered but none is a type bmd recognizes — " +
+        "run `bmd discover --all` to see them.";
 
     /// <summary>The interactive `--add` flow: list the supported candidates, ask which one to
     /// keep, and write its address (and non-default port) into config. `shown` is already

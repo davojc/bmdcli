@@ -42,13 +42,16 @@ public static class DeviceAssembler
     /// label of the SRV name (the part before the first '.').
     /// <para>When <paramref name="services"/> is supplied, an SRV record is only admitted if
     /// some PTR record in <paramref name="records"/> both has a <c>Name</c> matching one of
-    /// <paramref name="services"/> and a <c>Target</c> matching the SRV's <c>Name</c>. This is
-    /// what keeps a pooled response set — which, once a socket joins the mDNS multicast group,
-    /// contains every device replying on the segment, not just the ones bmd queried for —
-    /// scoped to devices actually advertised under a service bmd asked about, rather than
-    /// admitting every SRV+A pair regardless of what service it belongs to. When
-    /// <paramref name="services"/> is <c>null</c>, every SRV record is admitted, matching prior
-    /// (unfiltered) behavior.</para></summary>
+    /// <paramref name="services"/> and a <c>Target</c> matching the SRV's <c>Name</c>. This
+    /// defends the pooled response set against stray unicast traffic and any future change to
+    /// how records are collected: <see cref="MdnsClient"/>'s socket binds an ephemeral port, so
+    /// it cannot actually receive multicast traffic addressed to 224.0.0.251:5353 — it only
+    /// hears responders that honor RFC 6762 §6.7's legacy-unicast reply rule (Blackmagic gear
+    /// does; the hardware run proves it). So the pool is not "every device replying on the
+    /// segment" in practice, but the filter still scopes admission to devices actually
+    /// advertised under a service bmd asked about, rather than admitting every SRV+A pair
+    /// regardless of what service it belongs to. When <paramref name="services"/> is
+    /// <c>null</c>, every SRV record is admitted, matching prior (unfiltered) behavior.</para></summary>
     public static IReadOnlyList<DiscoveredDevice> FromRecords(
         IReadOnlyList<DnsRecord> records, IReadOnlyCollection<string>? services = null)
     {

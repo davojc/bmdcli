@@ -1,4 +1,5 @@
 using System.Net;
+using System.Net.NetworkInformation;
 using System.Net.Sockets;
 using System.Text.Json;
 using Bmd.Commands;
@@ -110,6 +111,19 @@ public class DiscoverCommandsTests : IDisposable
         Assert.Contains("subnet", err);
     }
 
+    [Fact]
+    public async Task Discover_DevicesAnsweredButNoneRecognized_DistinctNoteOnStderr_Exit0()
+    {
+        // Nine real devices answering, none of them a recognized type, must not be reported
+        // as "No devices found" — that wording is only true when literally nothing answered.
+        Assert.Equal(0, await Commands([Unsupported]).Discover());
+        Assert.Equal("", _stdout.ToString());
+        var err = _stderr.ToString();
+        Assert.DoesNotContain("No devices found", err);
+        Assert.Contains("1 device", err);
+        Assert.Contains("bmd discover --all", err);
+    }
+
     [Theory]
     [InlineData(0)]
     [InlineData(-1)]
@@ -124,6 +138,19 @@ public class DiscoverCommandsTests : IDisposable
     public async Task Discover_SocketFailure_Exit1_CleanError()
     {
         Assert.Equal(1, await FailingCommands(new SocketException()).Discover());
+        Assert.Equal("", _stdout.ToString());
+        var err = _stderr.ToString();
+        Assert.StartsWith("error:", err);
+        Assert.DoesNotContain("   at ", err);
+    }
+
+    [Fact]
+    public async Task Discover_NetworkInformationFailure_Exit1_CleanError()
+    {
+        // NetworkInterface.GetAllNetworkInterfaces() can throw this at the OS level; it derives
+        // from Win32Exception, not SocketException, so it needs its own catch clause or it
+        // becomes an unhandled crash with a stack trace instead of one clean error line.
+        Assert.Equal(1, await FailingCommands(new NetworkInformationException()).Discover());
         Assert.Equal("", _stdout.ToString());
         var err = _stderr.ToString();
         Assert.StartsWith("error:", err);

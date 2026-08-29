@@ -18,8 +18,10 @@ Linux, and macOS.
 - Git-style layered configuration (global → local → command line). No
   environment variables.
 - Single-file Native AOT binaries (~5 MB), fast cold start, no runtime install.
-- Scriptable: `--json` output on read commands, meaningful exit codes,
-  stdout/stdin-friendly export/restore.
+- Agent-first: AI agents and scripts are first-class users alongside humans.
+  Every command supports `--json` structured output, help text is a complete
+  API contract, exit codes are meaningful, and export/restore are
+  stdout/stdin-friendly. See "Agents and scripting".
 - Self-updating: releases built by GitHub Actions on semver tags; `bmd update`
   downloads, verifies, and installs the latest release in place.
 - Discoverable: a GitHub Pages site documents the tool per device and gives
@@ -78,7 +80,7 @@ Common options on every `videohub` command:
 | `--host <addr>` | from config `videohub.host` | required if not configured |
 | `--port <n>` | from config `videohub.port`, else 9990 | |
 | `--timeout <sec>` | from config `videohub.timeout`, else 5 | connect + command timeout |
-| `--json` | off | read commands only; machine-readable output |
+| `--json` | off | every command; machine-readable output (see "Agents and scripting") |
 
 ### Numbering rule (hard rule)
 
@@ -86,6 +88,40 @@ The CLI is **1-based** everywhere the user sees a number — matching device
 front panels and Blackmagic's Videohub software. The wire protocol is 0-based;
 conversion happens at exactly one place, the protocol layer boundary.
 Inconsistency here is the most user-hostile bug this tool could have.
+
+## Agents and scripting (interface contract)
+
+AI agents and scripts are first-class users. Two consequences bind every
+command, current and future:
+
+**`--json` on every command.** Passing `--json` switches stdout to a single
+JSON document (object or array; camelCase, stable field names). It changes
+representation only, never behavior. Mutating commands emit a result object
+describing what changed, so an agent never needs a follow-up query:
+
+```
+bmd config get videohub.host --json    → {"key":"videohub.host","value":"10.0.0.5","origin":"C:\\studio\\.bmdconfig"}
+bmd config list --json                 → [{"key":"videohub.host","value":"10.0.0.5","origin":"..."}]
+bmd config set videohub.host 10.0.0.9 --json
+                                       → {"key":"videohub.host","value":"10.0.0.9","file":"..."}
+bmd config unset videohub.host --json  → {"key":"videohub.host","removed":true}
+bmd videohub info --json               → {"modelName":"...","videoInputs":20,"videoOutputs":20,...}
+bmd videohub output list --json        → [{"n":1,"label":"Monitor","input":4,"inputLabel":"Cam 4","lock":"unlocked"}]
+bmd videohub route list --json         → [{"output":1,"outputLabel":"Monitor","input":4,"inputLabel":"Cam 4"}]
+```
+
+Errors are unaffected by `--json`: always one plain `error: ...` line on
+stderr plus the exit code (0 success / 1 operation failure / 2 usage or
+format error). Agents branch on exit code and read stderr for the reason;
+stdout carries only the result document (nothing on failure). Serialization
+uses System.Text.Json **source generators** through one `BmdJsonContext`
+(AOT-safe; reflection-based serialization is forbidden).
+
+**Help is part of the API.** Every command and flag carries a complete
+description (generated from XML doc comments); argument docs state units,
+ranges, and 1-based numbering where relevant. An agent reading `--help`
+output alone must be able to construct a correct invocation. Renaming
+commands, flags, or JSON fields is a breaking change to be treated like one.
 
 ## Configuration
 
@@ -398,8 +434,10 @@ site/
 
 1. **Skeleton:** project + ConsoleAppFramework wiring + config subsystem
    (`bmd config …` works end-to-end) + AOT publish proven on one RID.
-2. **Read path:** protocol parser + `VideohubClient` connect/dump + fake server
-   + `info` / `input list` / `output list` / `route list` (+ `--json`).
+2. **Read path:** retrofit `--json` onto the config commands (the agent
+   contract landed after milestone 1 shipped), then protocol parser +
+   `VideohubClient` connect/dump + fake server + `info` / `input list` /
+   `output list` / `route list` (+ `--json`).
 3. **Write path:** `route set`, renames, lock/unlock/force.
 4. **Watch:** pushed-update stream → `watch`.
 5. **Snapshots:** `export` (with verification/retry) + `restore` (diff-apply).

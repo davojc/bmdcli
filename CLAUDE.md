@@ -34,7 +34,15 @@ before architectural changes; update it when a design decision changes.
   fixtures; client/commands test against the in-process fake Videohub TCP
   server in the test project — never against real hardware in CI.
 - Errors: one clear message to stderr, no stack traces. Exit codes: 0 success,
-  1 operation failure, 2 usage error.
+  1 operation failure, 2 usage/format error.
+- **Agent-first interface.** Every command supports `--json`: one JSON
+  document on stdout (camelCase, stable field names, via the source-gen
+  `BmdJsonContext` — never reflection serialization). `--json` changes
+  representation, never behavior; errors stay plain `error:` on stderr with
+  the exit-code contract regardless. Help text is the API: every command,
+  argument, and flag fully documented via XML doc comments (units, ranges,
+  1-based numbering). Renaming commands/flags/JSON fields is a breaking
+  change.
 - **Releases are tag-driven.** Pushing a semver tag (`v1.2.0`) triggers the
   GitHub Actions release matrix (AOT builds on each target OS — never
   cross-OS). The tag is the only version source: stamped via `-p:Version`,

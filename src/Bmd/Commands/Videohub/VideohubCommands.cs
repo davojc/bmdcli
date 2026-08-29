@@ -173,6 +173,126 @@ public class VideohubCommands
         }
     }
 
+    /// <summary>Apply a snapshot to the device, changing only what differs. Numbering is 1-based.</summary>
+    /// <param name="file">Snapshot file to apply; use - to read from stdin.</param>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="dryRun">Show what would change without touching the device.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> Restore(
+        [Argument] string file,
+        string? host = null, int? port = null, int? timeout = null,
+        bool dryRun = false, bool noBackup = false, bool json = false)
+    {
+        VideohubSnapshot snapshot;
+        try
+        {
+            var text = file == "-" ? Console.In.ReadToEnd() : File.ReadAllText(file);
+            snapshot = VideohubSnapshot.FromJson(text);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SnapshotFormatException)
+        {
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return Task.FromResult(1);
+        }
+
+        // --dry-run skips the backup: nothing on the device is going to change, so there is
+        // nothing to protect against.
+        return WithBackedUpClientAsync(host, port, timeout, noBackup || dryRun, async (client, backup) =>
+        {
+            var problems = snapshot.IncompatibilityWith(client.State.Device);
+            if (problems.Count > 0)
+            {
+                // A usage/format error, not a device error: the wrong snapshot file was
+                // supplied. Exit 2 (like the other "bad argument" paths), device untouched.
+                Console.Error.WriteLine("error: snapshot does not match this device");
+                foreach (var problem in problems) Console.Error.WriteLine($"  {problem}");
+                return 2;
+            }
+
+            // Computed once, from connect-time state, and iterated as a fixed list — never
+            // re-derived from client.State mid-loop. client.State is updated by whatever the
+            // device echoes back (which can arrive before or after the ACK depending on
+            // firmware), so re-querying it partway through applying changes would make the
+            // remaining work order- and timing-dependent instead of a plan decided up front.
+            var changes = RestorePlan.Compute(snapshot, client.State);
+            var applied = 0;
+            try
+            {
+                foreach (var change in changes)
+                {
+                    if (dryRun)
+                    {
+                        if (!json) Console.WriteLine($"would {change.Describe()}");
+                        continue;
+                    }
+                    switch (change.Kind)
+                    {
+                        case RestoreChangeKind.InputLabel:
+                            await client.RenameInputAsync(change.N, change.To);
+                            break;
+                        case RestoreChangeKind.OutputLabel:
+                            await client.RenameOutputAsync(change.N, change.To);
+                            break;
+                        default:
+                            await client.SetRouteAsync(change.N, change.TargetInput);
+                            break;
+                    }
+                    applied++;
+                    if (!json) Console.WriteLine(change.Describe());
+                }
+            }
+            catch (TimeoutException)
+            {
+                // A timeout leaves the block possibly half-sent and the reader mid-stream —
+                // framing on this connection is undefined from here on, so we must stop
+                // immediately rather than risk sending another block. Report progress and
+                // let the caller re-run: the next connection recomputes the diff from fresh
+                // state, so it resumes rather than repeats.
+                Console.Error.WriteLine(
+                    $"error: timed out after applying {applied} of {changes.Count} changes; re-run to resume");
+                return 1;
+            }
+            catch (VideohubCommandRejectedException ex)
+            {
+                // A NAK, unlike a timeout, leaves the connection's framing well-defined (the
+                // device replied, it just refused) — but the loop still must not continue,
+                // since the rejected change was never applied and later changes may depend on
+                // device state the rejection left unmoved. Report progress the same way as the
+                // timeout path so the applied count is never silently lost on this path either.
+                Console.Error.WriteLine(
+                    $"error: {ex.Message}; applied {applied} of {changes.Count} changes before stopping");
+                return 1;
+            }
+
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new VideohubRestoreResult(
+                        file, snapshot.Device, changes.Count, applied, dryRun, backup,
+                        changes.Select(c => new RestoreChangeResult(KindWord(c.Kind), c.N, c.From, c.To)).ToArray()),
+                    BmdJsonContext.Default.VideohubRestoreResult));
+            else if (changes.Count == 0)
+                Console.WriteLine("Already matches the snapshot; nothing to do.");
+            else if (dryRun)
+                Console.WriteLine($"{changes.Count} change(s) would be applied from {file}.");
+            else
+            {
+                Console.WriteLine($"Restored {applied} change(s) from {file}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+    }
+
+    static string KindWord(RestoreChangeKind kind) => kind switch
+    {
+        RestoreChangeKind.InputLabel => "inputLabel",
+        RestoreChangeKind.OutputLabel => "outputLabel",
+        _ => "route",
+    };
+
     /// <summary>Route an input to an output (both 1-based, matching the device's front panel).</summary>
     /// <param name="output">Output to change (1-based).</param>
     /// <param name="input">Input to route to it (1-based).</param>

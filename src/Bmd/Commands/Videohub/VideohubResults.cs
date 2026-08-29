@@ -33,3 +33,17 @@ public sealed record VideohubRenameResult(string Kind, int N, string PreviousLab
 /// with its label, the resulting and previous lock words (<c>"unlocked"</c>, <c>"owned"</c>,
 /// or <c>"locked"</c>), and the pre-change backup path (null if skipped).</summary>
 public sealed record VideohubLockResult(int Output, string OutputLabel, string Lock, string PreviousLock, string? Backup);
+
+/// <summary>One change applied (or that would be applied) by `videohub restore`. Kind is
+/// "inputLabel", "outputLabel", or "route"; N is the 1-based input/output number; From/To
+/// are the previous and new label (for a route, the previous and new input's label).</summary>
+public sealed record RestoreChangeResult(string Kind, int N, string From, string To);
+
+/// <summary>Result of `videohub restore`: the snapshot file and device, how many changes were
+/// found and how many were actually applied (equal on full success, less than Changes on a
+/// dry run or a run stopped early by a timeout or rejection), whether this was a dry run, the
+/// pre-change backup path (null if skipped or dry-run), and the changes themselves in the
+/// order they were (or would be) applied.</summary>
+public sealed record VideohubRestoreResult(
+    string File, string Device, int Changes, int Applied, bool DryRun, string? Backup,
+    RestoreChangeResult[] Details);

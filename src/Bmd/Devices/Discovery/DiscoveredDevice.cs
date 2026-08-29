@@ -39,14 +39,37 @@ public static class DeviceAssembler
     /// <summary>Builds one device per SRV record that has a resolvable A record. A SRV entry
     /// without a matching address is skipped — an incomplete announcement is not a device.
     /// The device name comes from the TXT <c>name=</c> entry if present, else the instance
-    /// label of the SRV name (the part before the first '.').</summary>
-    public static IReadOnlyList<DiscoveredDevice> FromRecords(IReadOnlyList<DnsRecord> records)
+    /// label of the SRV name (the part before the first '.').
+    /// <para>When <paramref name="services"/> is supplied, an SRV record is only admitted if
+    /// some PTR record in <paramref name="records"/> both has a <c>Name</c> matching one of
+    /// <paramref name="services"/> and a <c>Target</c> matching the SRV's <c>Name</c>. This is
+    /// what keeps a pooled response set — which, once a socket joins the mDNS multicast group,
+    /// contains every device replying on the segment, not just the ones bmd queried for —
+    /// scoped to devices actually advertised under a service bmd asked about, rather than
+    /// admitting every SRV+A pair regardless of what service it belongs to. When
+    /// <paramref name="services"/> is <c>null</c>, every SRV record is admitted, matching prior
+    /// (unfiltered) behavior.</para></summary>
+    public static IReadOnlyList<DiscoveredDevice> FromRecords(
+        IReadOnlyList<DnsRecord> records, IReadOnlyCollection<string>? services = null)
     {
+        // RFC 1035 §3.1: DNS name comparison is case-insensitive throughout this method — a
+        // device's SRV target and its A record's name (or its SRV name and TXT/PTR names) are
+        // not guaranteed to share byte-identical casing on the wire, so ordinal comparison
+        // anywhere here would silently drop real devices whose firmware capitalizes records
+        // differently.
+        HashSet<string>? admittedSrvNames = null;
+        if (services is not null)
+        {
+            var queriedServices = new HashSet<string>(services, StringComparer.OrdinalIgnoreCase);
+            admittedSrvNames = new HashSet<string>(StringComparer.OrdinalIgnoreCase);
+            foreach (var record in records)
+            {
+                if (record is PtrRecord ptr && queriedServices.Contains(ptr.Name))
+                    admittedSrvNames.Add(ptr.Target);
+            }
+        }
+
         var srvRecords = new List<SrvRecord>();
-        // RFC 1035 §3.1: DNS name comparison is case-insensitive. A device's SRV target and
-        // its A record's name (or its SRV name and TXT name) are not guaranteed to share
-        // byte-identical casing on the wire, so an ordinal dictionary here would silently
-        // drop real devices whose firmware capitalizes the two records differently.
         var txtByName = new Dictionary<string, TxtRecord>(StringComparer.OrdinalIgnoreCase);
         var addressByName = new Dictionary<string, IPAddress>(StringComparer.OrdinalIgnoreCase);
 
@@ -55,7 +78,8 @@ public static class DeviceAssembler
             switch (record)
             {
                 case SrvRecord srv:
-                    srvRecords.Add(srv);
+                    if (admittedSrvNames is null || admittedSrvNames.Contains(srv.Name))
+                        srvRecords.Add(srv);
                     break;
                 case TxtRecord txt:
                     txtByName[txt.Name] = txt; // last wins on duplicates

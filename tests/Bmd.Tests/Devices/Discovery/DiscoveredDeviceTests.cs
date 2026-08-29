@@ -140,4 +140,66 @@ public class DiscoveredDeviceTests
     {
         Assert.Equal(expected, DeviceClasses.DeviceTypeFor(deviceClass));
     }
+
+    [Fact]
+    public void FromRecords_ServiceFilter_ExcludesSrvNotAdmittedByAnyQueriedPtr()
+    {
+        // No PTR record at all admits this SRV — as would happen for an SRV/A pair pooled
+        // from unrelated mDNS traffic on the segment rather than from a service bmd queried for.
+        var records = new List<DnsRecord>
+        {
+            new SrvRecord("Studio Hub._blackmagic._tcp.local", "studio-hub.local", 9990),
+            new ARecord("studio-hub.local", Address),
+        };
+        Assert.Empty(DeviceAssembler.FromRecords(records, ["_blackmagic._tcp.local"]));
+    }
+
+    [Fact]
+    public void FromRecords_ServiceFilter_IncludesSrvAdmittedByQueriedPtr()
+    {
+        var device = Assert.Single(DeviceAssembler.FromRecords(Records(), ["_blackmagic._tcp.local"]));
+        Assert.Equal("Studio Hub", device.Name);
+        Assert.Equal(Address, device.Address);
+    }
+
+    [Fact]
+    public void FromRecords_ServiceFilter_PtrUnderUnrelatedService_DoesNotAdmitSrv()
+    {
+        // The PTR exists, but under a service bmd never queried for — a Chromecast or similar
+        // answering on the same multicast group must not be admitted just because bmd's socket
+        // happened to receive its announcement too.
+        var records = new List<DnsRecord>
+        {
+            new PtrRecord("_googlecast._tcp.local", "Studio Hub._blackmagic._tcp.local"),
+            new SrvRecord("Studio Hub._blackmagic._tcp.local", "studio-hub.local", 9990),
+            new ARecord("studio-hub.local", Address),
+        };
+        Assert.Empty(DeviceAssembler.FromRecords(records, ["_blackmagic._tcp.local"]));
+    }
+
+    [Fact]
+    public void FromRecords_ServiceFilter_PtrNameMatchIsCaseInsensitive()
+    {
+        var records = new List<DnsRecord>
+        {
+            new PtrRecord("_BLACKMAGIC._TCP.LOCAL", "Studio Hub._blackmagic._tcp.local"),
+            new SrvRecord("Studio Hub._blackmagic._tcp.local", "studio-hub.local", 9990),
+            new ARecord("studio-hub.local", Address),
+        };
+        var device = Assert.Single(DeviceAssembler.FromRecords(records, ["_blackmagic._tcp.local"]));
+        Assert.Equal(Address, device.Address);
+    }
+
+    [Fact]
+    public void FromRecords_NoServiceFilter_BehavesExactlyAsBeforeFiltering()
+    {
+        // services omitted entirely: every SRV+A pair is admitted regardless of any PTR,
+        // matching every pre-filter test above and below unchanged.
+        var records = new List<DnsRecord>
+        {
+            new SrvRecord("Studio Hub._blackmagic._tcp.local", "studio-hub.local", 9990),
+            new ARecord("studio-hub.local", Address),
+        };
+        Assert.Single(DeviceAssembler.FromRecords(records));
+    }
 }

@@ -80,5 +80,22 @@ public class MdnsClientTests
         Assert.True(DateTime.UtcNow - started < TimeSpan.FromSeconds(5), "cancellation must cut the window short");
     }
 
+    [Fact]
+    public async Task Discover_AlreadyCancelledToken_ReturnsWithoutThrowing()
+    {
+        // An already-cancelled token guarantees cancellation lands during the send phase
+        // itself (SendAsync observes it immediately), not 200ms later during the receive
+        // loop — the gap the socket-leak bug lived in: that UdpClient must still be disposed
+        // even though it never reaches `clients`.
+        using var cts = new CancellationTokenSource();
+        cts.Cancel();
+
+        var devices = await MdnsClient.DiscoverAsync(
+            new IPEndPoint(IPAddress.Loopback, 59999), IPAddress.Loopback,
+            TimeSpan.FromSeconds(30), cts.Token);
+
+        Assert.Empty(devices);
+    }
+
     static byte[] GoldenResponse() => Convert.FromHexString(DiscoveryFixtures.ResponseHex);
 }

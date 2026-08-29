@@ -68,12 +68,21 @@ public sealed class MdnsClient
                         await udp.SendAsync(DnsMessage.EncodeQuery(service), destination, ct);
 
                     clients.Add(udp);
+                    udp = null; // ownership transferred to `clients` — the finally below is a no-op
                 }
                 catch (SocketException ex)
                 {
                     // This one interface refuses multicast (or the send otherwise failed) —
                     // that must not abort discovery on the machine's other interfaces.
                     lastFailure = ex;
+                }
+                finally
+                {
+                    // Reached on every failure path — including an OperationCanceledException
+                    // from a `ct` that fires mid-send, which isn't a SocketException and so
+                    // isn't caught above. Without this, a socket created just before cancellation
+                    // lands would never make it into `clients` and would leak: the outer
+                    // `finally` only disposes what's already in that list.
                     udp?.Dispose();
                 }
             }
@@ -90,7 +99,7 @@ public sealed class MdnsClient
             var records = new List<DnsRecord>();
             foreach (var list in perClientRecords) records.AddRange(list);
 
-            return DeviceAssembler.FromRecords(records)
+            return DeviceAssembler.FromRecords(records, MdnsServices.All)
                 .GroupBy(d => (d.Address, d.Port))
                 .Select(g => g.First())
                 .ToList();
@@ -131,6 +140,12 @@ public sealed class MdnsClient
                 }
                 catch (SocketException)
                 {
+                    // A socket that keeps failing synchronously (e.g. a stream of stale ICMP
+                    // errors) would otherwise spin hot for whatever remains of the window; this
+                    // still terminates on schedule via `cts.Token` either way, but the short
+                    // delay keeps a misbehaving socket from burning CPU while it does. If `cts`
+                    // is already cancelled, this throws immediately and exits the loop below.
+                    await Task.Delay(20, cts.Token);
                     continue;
                 }
 

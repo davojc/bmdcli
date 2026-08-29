@@ -125,6 +125,11 @@ public class VideohubCommands
             }
             var resolvedPort = port ?? GetConfigInt(store, "videohub.port") ?? 9990;
             var resolvedTimeout = timeout ?? GetConfigInt(store, "videohub.timeout") ?? 5;
+            if (resolvedTimeout <= 0)
+            {
+                Console.Error.WriteLine("error: timeout must be a positive number of seconds");
+                return 2;
+            }
             await using var client = await VideohubClient.ConnectAsync(
                 resolvedHost, resolvedPort, TimeSpan.FromSeconds(resolvedTimeout));
             return action(client);

@@ -19,7 +19,13 @@ public static class DumpParser
         var outputLabels = ParseIndexed(byHeader["OUTPUT LABELS"], device.VideoOutputs);
         var routes = new int[device.VideoOutputs];
         foreach (var (index, value) in ParsePairs(byHeader["VIDEO OUTPUT ROUTING"], device.VideoOutputs))
-            routes[index] = ParseInt(value, "VIDEO OUTPUT ROUTING");
+        {
+            var route = ParseInt(value, "VIDEO OUTPUT ROUTING");
+            if (route < 0 || route >= device.VideoInputs)
+                throw new VideohubProtocolException(
+                    $"route for output {index} has invalid input {route} (valid range 0-{device.VideoInputs - 1})");
+            routes[index] = route;
+        }
         var locks = new LockState[device.VideoOutputs];
         foreach (var (index, value) in ParsePairs(byHeader["VIDEO OUTPUT LOCKS"], device.VideoOutputs))
             locks[index] = value switch

@@ -88,6 +88,29 @@ public class VideohubCommandsTests : IDisposable
     }
 
     [Fact]
+    public async Task Info_NegativeTimeout_Exit2_CleanError()
+    {
+        Assert.Equal(2, await Commands().Info(host: "127.0.0.1", port: 9990, timeout: -5));
+        Assert.Equal("", _stdout.ToString());
+        Assert.Contains("timeout must be a positive", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+    }
+
+    [Fact]
+    public async Task Info_NegativeTimeoutFromConfig_Exit2_CleanError()
+    {
+        var store = ConfigStore.Load(GlobalPath, WorkDir);
+        Assert.True(ConfigKey.TryParse("videohub.host", out var hostKey));
+        Assert.True(ConfigKey.TryParse("videohub.timeout", out var timeoutKey));
+        store.Set(hostKey, "127.0.0.1", global: false);
+        store.Set(timeoutKey, "-5", global: false);
+        Assert.Equal(2, await Commands().Info());
+        Assert.Equal("", _stdout.ToString());
+        Assert.Contains("timeout must be a positive", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+    }
+
+    [Fact]
     public async Task Info_InvalidPortInConfig_Exit1()
     {
         var store = ConfigStore.Load(GlobalPath, WorkDir);

@@ -71,4 +71,13 @@ public class DumpParserTests
         var blocks = BlockReader.ReadBlocks(Fixtures.Dump4x4.Replace("Friendly name: Test Hub\n", ""));
         Assert.Null(DumpParser.Parse(blocks).Device.FriendlyName);
     }
+
+    [Fact]
+    public void Parse_RouteValueOutOfRange_Throws()
+    {
+        var dump = Fixtures.Dump4x4.Replace("0 3\n", "0 7\n");
+        var blocks = BlockReader.ReadBlocks(dump);
+        var ex = Assert.Throws<VideohubProtocolException>(() => DumpParser.Parse(blocks));
+        Assert.Contains("7", ex.Message);
+    }
 }

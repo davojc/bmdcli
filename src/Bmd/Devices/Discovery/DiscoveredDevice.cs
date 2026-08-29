@@ -43,8 +43,12 @@ public static class DeviceAssembler
     public static IReadOnlyList<DiscoveredDevice> FromRecords(IReadOnlyList<DnsRecord> records)
     {
         var srvRecords = new List<SrvRecord>();
-        var txtByName = new Dictionary<string, TxtRecord>();
-        var addressByName = new Dictionary<string, IPAddress>();
+        // RFC 1035 §3.1: DNS name comparison is case-insensitive. A device's SRV target and
+        // its A record's name (or its SRV name and TXT name) are not guaranteed to share
+        // byte-identical casing on the wire, so an ordinal dictionary here would silently
+        // drop real devices whose firmware capitalizes the two records differently.
+        var txtByName = new Dictionary<string, TxtRecord>(StringComparer.OrdinalIgnoreCase);
+        var addressByName = new Dictionary<string, IPAddress>(StringComparer.OrdinalIgnoreCase);
 
         foreach (var record in records)
         {
@@ -77,9 +81,9 @@ public static class DeviceAssembler
                     int eq = entry.IndexOf('=');
                     if (eq < 0) continue;
                     var key = entry[..eq];
-                    var value = entry[(eq + 1)..];
+                    var value = entry[(eq + 1)..].Trim();
                     if (string.Equals(key, "class", StringComparison.OrdinalIgnoreCase)) deviceClass = value;
-                    else if (string.Equals(key, "name", StringComparison.OrdinalIgnoreCase)) name = value;
+                    else if (string.Equals(key, "name", StringComparison.OrdinalIgnoreCase) && value.Length > 0) name = value;
                 }
             }
 

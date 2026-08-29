@@ -78,6 +78,58 @@ public class DiscoveredDeviceTests
         Assert.Contains(devices, d => d.Name == "Second Hub");
     }
 
+    [Fact]
+    public void FromRecords_ARecordNameDiffersOnlyInCase_StillResolvesAddress()
+    {
+        // RFC 1035 §3.1: DNS name comparison is case-insensitive. Real firmware is not
+        // guaranteed to emit an SRV target with byte-identical casing to the A record name.
+        var records = new List<DnsRecord>
+        {
+            new PtrRecord("_blackmagic._tcp.local", "Studio Hub._blackmagic._tcp.local"),
+            new SrvRecord("Studio Hub._blackmagic._tcp.local", "studio-hub.local", 9990),
+            new TxtRecord("Studio Hub._blackmagic._tcp.local", ["class=Videohub", "name=Studio Hub"]),
+            new ARecord("Studio-Hub.LOCAL", Address),
+        };
+
+        var device = Assert.Single(DeviceAssembler.FromRecords(records));
+        Assert.Equal(Address, device.Address);
+        Assert.Equal("Videohub", device.DeviceClass);
+    }
+
+    [Fact]
+    public void FromRecords_TxtRecordNameDiffersOnlyInCase_StillResolvesClass()
+    {
+        var records = new List<DnsRecord>
+        {
+            new PtrRecord("_blackmagic._tcp.local", "Studio Hub._blackmagic._tcp.local"),
+            new SrvRecord("Studio Hub._blackmagic._tcp.local", "studio-hub.local", 9990),
+            new TxtRecord("STUDIO HUB._BLACKMAGIC._TCP.LOCAL", ["class=Videohub", "name=Studio Hub"]),
+            new ARecord("studio-hub.local", Address),
+        };
+
+        var device = Assert.Single(DeviceAssembler.FromRecords(records));
+        Assert.Equal("Videohub", device.DeviceClass);
+        Assert.Equal("videohub", device.DeviceType);
+    }
+
+    [Theory]
+    [InlineData("")]
+    [InlineData("   ")]
+    public void FromRecords_EmptyOrWhitespaceName_FallsBackToInstanceLabel(string blankName)
+    {
+        var device = Assert.Single(DeviceAssembler.FromRecords(Records(name: blankName)));
+        Assert.Equal("Studio Hub", device.Name);
+    }
+
+    [Fact]
+    public void FromRecords_TrimsWhitespaceAroundTxtValues()
+    {
+        var device = Assert.Single(DeviceAssembler.FromRecords(Records(deviceClass: " Videohub ", name: " Studio Hub ")));
+        Assert.Equal("Videohub", device.DeviceClass);
+        Assert.Equal("videohub", device.DeviceType);
+        Assert.Equal("Studio Hub", device.Name);
+    }
+
     [Theory]
     [InlineData("Videohub", "videohub")]
     [InlineData("videohub", "videohub")]

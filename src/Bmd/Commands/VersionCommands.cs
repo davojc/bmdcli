@@ -20,6 +20,6 @@ public class VersionCommands
     }
 }
 
-/// <summary>The `bmd version` result: the build-stamped version string and target runtime
+/// <summary>The bmd version result: the build-stamped version string and target runtime
 /// identifier (e.g. "win-x64", or "unknown" for a build that didn't specify one).</summary>
 public sealed record VersionResult(string Version, string RuntimeIdentifier);

@@ -218,6 +218,178 @@ public class VideohubCommands
             return 0;
         });
 
+    /// <summary>Rename an input (1-based).</summary>
+    /// <param name="input">Input to rename (1-based).</param>
+    /// <param name="label">New label. Must not contain newlines.</param>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> InputRename(
+        [Argument] int input, [Argument] string label,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        {
+            var device = client.State.Device;
+            if (input < 1 || input > device.VideoInputs)
+            {
+                Console.Error.WriteLine($"error: input must be between 1 and {device.VideoInputs}");
+                return 2;
+            }
+            if (!TryValidateLabel(label, out var labelError))
+            {
+                Console.Error.WriteLine(labelError);
+                return 2;
+            }
+
+            var previousLabel = client.State.GetInputLabel(input);
+            await client.RenameInputAsync(input, label);
+
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new VideohubRenameResult("input", input, previousLabel, label, backup),
+                    BmdJsonContext.Default.VideohubRenameResult));
+            else
+            {
+                Console.WriteLine($"input {input}: {previousLabel} → {label}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+
+    /// <summary>Rename an output (1-based).</summary>
+    /// <param name="output">Output to rename (1-based).</param>
+    /// <param name="label">New label. Must not contain newlines.</param>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> OutputRename(
+        [Argument] int output, [Argument] string label,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        {
+            var device = client.State.Device;
+            if (output < 1 || output > device.VideoOutputs)
+            {
+                Console.Error.WriteLine($"error: output must be between 1 and {device.VideoOutputs}");
+                return 2;
+            }
+            if (!TryValidateLabel(label, out var labelError))
+            {
+                Console.Error.WriteLine(labelError);
+                return 2;
+            }
+
+            var previousLabel = client.State.GetOutputLabel(output);
+            await client.RenameOutputAsync(output, label);
+
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new VideohubRenameResult("output", output, previousLabel, label, backup),
+                    BmdJsonContext.Default.VideohubRenameResult));
+            else
+            {
+                Console.WriteLine($"output {output}: {previousLabel} → {label}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+
+    /// <summary>Take the lock on an output (1-based), preventing other controllers from
+    /// routing it or taking it over without --force.</summary>
+    /// <param name="output">Output to lock (1-based).</param>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> OutputLock(
+        [Argument] int output,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        {
+            var device = client.State.Device;
+            if (output < 1 || output > device.VideoOutputs)
+            {
+                Console.Error.WriteLine($"error: output must be between 1 and {device.VideoOutputs}");
+                return 2;
+            }
+
+            var outputLabel = client.State.GetOutputLabel(output);
+            var previousLock = LockWord(client.State.GetLock(output));
+            await client.LockOutputAsync(output);
+            var lockWord = LockWord(client.State.GetLock(output));
+
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new VideohubLockResult(output, outputLabel, lockWord, previousLock, backup),
+                    BmdJsonContext.Default.VideohubLockResult));
+            else
+            {
+                Console.WriteLine($"output {output} ({outputLabel}): {previousLock} → {lockWord}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+
+    /// <summary>Release the lock on an output (1-based). Without --force, unlocking an
+    /// output locked by another controller is left to the device to accept or refuse.</summary>
+    /// <param name="output">Output to unlock (1-based).</param>
+    /// <param name="force">Clear a lock held by another controller.</param>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> OutputUnlock(
+        [Argument] int output, bool force = false,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        {
+            var device = client.State.Device;
+            if (output < 1 || output > device.VideoOutputs)
+            {
+                Console.Error.WriteLine($"error: output must be between 1 and {device.VideoOutputs}");
+                return 2;
+            }
+
+            var outputLabel = client.State.GetOutputLabel(output);
+            var previousLock = LockWord(client.State.GetLock(output));
+            await client.UnlockOutputAsync(output, force);
+            var lockWord = LockWord(client.State.GetLock(output));
+
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new VideohubLockResult(output, outputLabel, lockWord, previousLock, backup),
+                    BmdJsonContext.Default.VideohubLockResult));
+            else
+            {
+                Console.WriteLine($"output {output} ({outputLabel}): {previousLock} → {lockWord}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+
+    /// <summary>Validates a label before it is sent to the device. Newlines would break the
+    /// line-oriented protocol, so they are rejected here rather than left to the device.</summary>
+    static bool TryValidateLabel(string label, out string error)
+    {
+        if (label.Contains('\n') || label.Contains('\r'))
+        {
+            error = "error: label must not contain newlines";
+            return false;
+        }
+        error = "";
+        return true;
+    }
+
     static string LockWord(LockState lockState) => lockState switch
     {
         LockState.Owned => "owned",

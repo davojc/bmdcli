@@ -23,5 +23,9 @@ app.Add("videohub output list", videohub.OutputList);
 app.Add("videohub route list", videohub.RouteList);
 app.Add("videohub export", videohub.Export);
 app.Add("videohub route set", videohub.RouteSet);
+app.Add("videohub input rename", videohub.InputRename);
+app.Add("videohub output rename", videohub.OutputRename);
+app.Add("videohub output lock", videohub.OutputLock);
+app.Add("videohub output unlock", videohub.OutputUnlock);
 
 app.Run(args);

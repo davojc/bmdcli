@@ -17,4 +17,6 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(VideohubRouteEntry[]))]
 [JsonSerializable(typeof(VideohubExportResult))]
 [JsonSerializable(typeof(VideohubRouteSetResult))]
+[JsonSerializable(typeof(VideohubRenameResult))]
+[JsonSerializable(typeof(VideohubLockResult))]
 public partial class BmdJsonContext : JsonSerializerContext;

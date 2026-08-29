@@ -9,7 +9,6 @@
   --border: #dfe1e4;
   --accent: #0757d8;
   --accent-fg: #ffffff;
-  --danger: #9a3412;
 
   /* The demo terminal keeps a fixed dark palette in both color schemes —
      a real terminal doesn't relabel itself for your OS theme, and it keeps
@@ -33,7 +32,6 @@
     --border: #2c2f36;
     --accent: #6ea8fe;
     --accent-fg: #0b1220;
-    --danger: #fca5a5;
   }
 }
 
@@ -318,6 +316,115 @@ h2 {
 
 .guide-callout p:last-child {
   margin-bottom: 0;
+}
+
+/* ---------- Guide page (videohub.html) ---------- */
+
+.guide-header {
+  margin-top: 0;
+}
+
+.back-link {
+  margin: 0 0 0.75rem;
+  font-size: 0.9rem;
+}
+
+.back-link a {
+  text-decoration: none;
+}
+
+.back-link a:hover,
+.back-link a:focus-visible {
+  text-decoration: underline;
+}
+
+.guide-header h1 {
+  margin: 0 0 0.4rem;
+  font-size: 1.9rem;
+}
+
+.guide-header .tagline {
+  margin-bottom: 0;
+}
+
+.page-nav {
+  margin-top: 1.75rem;
+  padding: 0.9rem 1.1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+}
+
+.page-nav ol {
+  margin: 0;
+  padding-left: 1.2rem;
+  columns: 2;
+  column-gap: 1.5rem;
+}
+
+.page-nav li {
+  break-inside: avoid;
+  margin-bottom: 0.3rem;
+  font-size: 0.92rem;
+}
+
+@media (max-width: 560px) {
+  .page-nav ol {
+    columns: 1;
+  }
+}
+
+/* Standalone command / output blocks in prose (as opposed to .steps pre, which lives
+   inside a numbered list item). */
+pre.cmd {
+  margin: 0.75rem 0;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  overflow-x: auto;
+}
+
+/* A block showing genuine device/CLI output rather than a command to type — same shape as
+   the demo terminal on the landing page, minus the always-dark background, since here it's
+   just illustrating text rather than staging a "live session" moment. */
+pre.cmd.cmd-out {
+  color: var(--fg-muted);
+}
+
+dl.exit-codes {
+  margin: 0.75rem 0 1.25rem;
+  display: grid;
+  gap: 0.6rem;
+}
+
+dl.exit-codes > div {
+  display: grid;
+  grid-template-columns: 5rem 1fr;
+  gap: 0.75rem;
+  align-items: baseline;
+}
+
+dl.exit-codes dt {
+  font-family: var(--font-mono);
+  font-weight: 600;
+  color: var(--fg-muted);
+}
+
+dl.exit-codes dd {
+  margin: 0;
+}
+
+@media (max-width: 480px) {
+  dl.exit-codes > div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}
+
+.limitations li,
+section#troubleshooting ul li {
+  margin-bottom: 0.6rem;
 }
 
 /* ---------- Footer ---------- */

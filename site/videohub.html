@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bmd — Videohub guide</title>
+<meta name="description" content="A practical, complete guide to controlling a Blackmagic Videohub with bmd: connecting, routing, backups, restore, watch, scripting, and troubleshooting.">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTInIGZpbGw9JyMwNzU3ZDgnLz48dGV4dCB4PSczMicgeT0nNDUnIGZvbnQtZmFtaWx5PSdtb25vc3BhY2UnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9J3doaXRlJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJz4mZ3Q7XzwvdGV4dD48L3N2Zz4=">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <header class="guide-header">
+    <p class="back-link"><a href="index.html">&larr; bmd</a></p>
+    <h1>The Videohub guide</h1>
+    <p class="tagline">Everything <code>bmd videohub</code> does, written for someone who has never used it.</p>
+  </header>
+
+  <nav class="page-nav" aria-label="Sections">
+    <ol>
+      <li><a href="#connecting">1. Connecting</a></li>
+      <li><a href="#looking-at-the-hub">2. Looking at the hub</a></li>
+      <li><a href="#changing-routes">3. Changing routes</a></li>
+      <li><a href="#backups">4. Backups</a></li>
+      <li><a href="#event-workflow">5. The event workflow</a></li>
+      <li><a href="#watching">6. Watching</a></li>
+      <li><a href="#scripting">7. Scripting and agents</a></li>
+      <li><a href="#known-limitations">8. Known limitations</a></li>
+      <li><a href="#troubleshooting">9. Troubleshooting</a></li>
+    </ol>
+  </nav>
+
+  <section id="connecting">
+    <h2>1. Connecting</h2>
+    <p>
+      Every <code>bmd videohub</code> command needs an address to talk to. The easiest way to get
+      one is to ask the network:
+    </p>
+    <pre class="cmd"><code>bmd discover</code></pre>
+    <p>
+      This listens for Blackmagic devices announcing themselves via mDNS on the local network and
+      prints what it finds:
+    </p>
+    <pre class="cmd cmd-out"><code>NAME                               TYPE      ADDRESS
+Blackmagic Smart Videohub 40 x 40  videohub  192.168.4.100:9990</code></pre>
+    <p>
+      Finding nothing is not an error — see <a href="#known-limitations">known limitations</a>
+      below for why discovery sometimes comes up empty. To save the address without typing it by
+      hand, add <code>--add</code> and pick the device from a numbered list:
+    </p>
+    <pre class="cmd"><code>bmd discover --add</code></pre>
+    <p>
+      This needs a real interactive terminal — it prints each recognized device, asks you to
+      choose one, and writes its address (and port, if not the default 9990) into config. Piped
+      or scripted input is refused rather than guessed at:
+    </p>
+    <pre class="cmd cmd-out"><code>error: --add needs an interactive terminal; run bmd config set &lt;type&gt;.host &lt;address&gt; instead</code></pre>
+    <p>
+      If you already know the address — or discovery can't reach the device — set it directly:
+    </p>
+    <pre class="cmd"><code>bmd config set videohub.host 192.168.1.50</code></pre>
+    <p>
+      Configuration is layered: a <code>.bmdconfig</code> file in the current directory (or the
+      nearest parent directory that has one) overrides the global config file, and a command's own
+      <code>--host</code> flag overrides both. This lets you keep a personal default globally while
+      a project directory pins a different hub, and lets any single command override either for
+      one-off use. When you're not sure where a value is coming from:
+    </p>
+    <pre class="cmd"><code>bmd config list --show-origin</code></pre>
+    <p>
+      Each line is prefixed with the file it was read from, so a surprising value is easy to trace.
+      Every command that talks to a device also accepts its own <code>--host</code>,
+      <code>--port</code>, and <code>--timeout</code>, which is convenient for one-off use against a
+      hub you haven't configured at all.
+    </p>
+  </section>
+
+  <section id="looking-at-the-hub">
+    <h2>2. Looking at the hub</h2>
+    <p>
+      Once an address is configured, start by looking at what's there. All four of these are
+      read-only, and every number bmd shows you — inputs, outputs, routes — is 1-based, matching
+      the numbering printed on the device's own front panel. There is no "input 0".
+    </p>
+    <pre class="cmd"><code>bmd videohub info</code></pre>
+    <pre class="cmd cmd-out"><code>Model:          Blackmagic Smart Videohub 40 x 40
+Friendly name:  Videohub
+Protocol:       2.8
+Video inputs:   40
+Video outputs:  40</code></pre>
+    <pre class="cmd"><code>bmd videohub input list</code></pre>
+    <pre class="cmd cmd-out"><code>N   LABEL
+1   FoH Sw PGM
+2   FoH Sw Aux
+3   FoH Sw MV
+4   Stage:Back:A:Cam
+…</code></pre>
+    <pre class="cmd"><code>bmd videohub output list</code></pre>
+    <pre class="cmd cmd-out"><code>N   LABEL                   INPUT  INPUT LABEL              LOCK
+1   Projector AR            1      FoH Sw PGM               unlocked
+2   Projector AL            1      FoH Sw PGM               unlocked
+3   Stage Screen            1      FoH Sw PGM               unlocked
+4   FoH MV 1                3      FoH Sw MV                unlocked
+…</code></pre>
+    <p>
+      <code>output list</code> shows the lock column too — <code>unlocked</code>,
+      <code>owned</code> (locked by this session), or <code>locked</code> (locked by someone
+      else). If you only care about routing, <code>route list</code> is the same information
+      without the lock column:
+    </p>
+    <pre class="cmd"><code>bmd videohub route list</code></pre>
+    <pre class="cmd cmd-out"><code>OUT  OUTPUT LABEL            IN  INPUT LABEL
+1    Projector AR            1   FoH Sw PGM
+2    Projector AL            1   FoH Sw PGM
+3    Stage Screen            1   FoH Sw PGM
+4    FoH MV 1                3   FoH Sw MV
+…</code></pre>
+  </section>
+
+  <section id="changing-routes">
+    <h2>3. Changing routes</h2>
+    <p>To send a different input to an output, name the output first, then the input:</p>
+    <pre class="cmd"><code>bmd videohub route set &lt;output&gt; &lt;input&gt;</code></pre>
+    <p>
+      For example, <code>bmd videohub route set 4 13</code> sends input 13 to output 4. Both
+      numbers are 1-based and validated against the device's real input/output count before
+      anything is sent — an out-of-range number is refused up front rather than left for the
+      device to reject:
+    </p>
+    <pre class="cmd cmd-out"><code>error: output must be between 1 and 40</code></pre>
+    <p>Renaming an input or output works the same way, with the new label as the last argument:</p>
+    <pre class="cmd"><code>bmd videohub input rename &lt;input&gt; &lt;label&gt;
+bmd videohub output rename &lt;output&gt; &lt;label&gt;</code></pre>
+    <p>
+      Labels can be anything except a newline — the device's own protocol is line-oriented, so a
+      newline in a label would corrupt it, and bmd rejects one before it's ever sent.
+    </p>
+    <p>
+      Locking an output stops other controllers from routing it (or taking the lock from you)
+      without <code>--force</code>:
+    </p>
+    <pre class="cmd"><code>bmd videohub output lock &lt;output&gt;
+bmd videohub output unlock &lt;output&gt;
+bmd videohub output unlock &lt;output&gt; --force</code></pre>
+    <p>
+      Without <code>--force</code>, unlocking an output someone else locked is left to the device
+      to accept or refuse — it may say no. A route change against a locked output is refused the
+      same way; see <a href="#troubleshooting">troubleshooting</a> for what that looks like.
+    </p>
+  </section>
+
+  <section id="backups">
+    <h2>4. Backups</h2>
+    <p>
+      Every command that changes the device — <code>route set</code>, the two
+      <code>rename</code> commands, <code>lock</code>, <code>unlock</code>, and
+      <code>restore</code> — snapshots the device's current labels and routing <em>before</em>
+      touching anything, and prints where that snapshot went:
+    </p>
+    <pre class="cmd cmd-out"><code>output 4 (FoH MV 1): FoH Sw MV → Switcher PGM
+Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-40/20260829-143512.json</code></pre>
+    <p>
+      Backups live under bmd's state directory, one subfolder per device (named from its host and
+      model), one timestamped JSON file per change: <code>~/.local/state/bmd/backups/…</code> on
+      Linux and macOS, <code>%LOCALAPPDATA%\bmd\backups\…</code> on Windows. Each file is verified
+      by reading it straight back after writing — <strong>if a backup can't be written and verified,
+      the mutation is aborted before it touches the device.</strong> A route change never runs
+      unprotected.
+    </p>
+    <p>Three config keys control the behavior, all under <code>backup.</code>:</p>
+    <pre class="cmd"><code>bmd config set backup.auto false   # turn off automatic backups entirely
+bmd config set backup.keep 20      # keep the last 20 backups per device (default 10)
+bmd config set backup.dir /path    # write backups somewhere other than the default</code></pre>
+    <p>
+      Older backups beyond the keep count are pruned automatically after each successful write. If
+      you want to skip the backup for one specific command — scripting a burst of changes you've
+      already backed up around, say — pass <code>--no-backup</code> on that command instead of
+      turning the setting off globally.
+    </p>
+  </section>
+
+  <section id="event-workflow">
+    <h2>5. The event workflow</h2>
+    <p>
+      Backups protect single changes, but for a whole event — walk in with a known-good routing
+      state, make changes during the show, put it back afterwards — <code>export</code> and
+      <code>restore</code> are the pair to use.
+    </p>
+    <p>Before the event, capture everything:</p>
+    <pre class="cmd"><code>bmd videohub export before.json</code></pre>
+    <p>
+      This reads the device, writes the snapshot, then reads the device a second time to confirm
+      nothing changed while exporting — if it did, it retries rather than hand you a snapshot that
+      was never actually true at any single instant. Locks are deliberately not captured; export
+      is about labels and routing.
+    </p>
+    <p>Afterwards, preview what putting it back would do without touching anything:</p>
+    <pre class="cmd"><code>bmd videohub restore before.json --dry-run</code></pre>
+    <p>Then actually apply it:</p>
+    <pre class="cmd"><code>bmd videohub restore before.json</code></pre>
+    <p>
+      Restore only changes what differs — if the device already matches the snapshot, it says so
+      and does nothing:
+    </p>
+    <pre class="cmd cmd-out"><code>Already matches the snapshot; nothing to do.</code></pre>
+    <p>
+      A snapshot can only be restored to the device it came from — a mismatched input/output count
+      or model name is refused before anything is sent. And restore is safe to re-run: if a
+      connection drops or the device rejects a change partway through, bmd stops immediately,
+      reports how many of the planned changes actually applied, and re-running recomputes the
+      remaining differences from the device's current state rather than repeating what already
+      landed.
+    </p>
+  </section>
+
+  <section id="watching">
+    <h2>6. Watching</h2>
+    <p>
+      A Videohub isn't only ever changed by bmd — other controllers (a hardware control panel, a
+      vendor app, another script) can route or rename things at any time, and the front panel
+      itself can change routes and locks. <code>watch</code> streams every change as it happens,
+      no matter who made it:
+    </p>
+    <pre class="cmd"><code>bmd videohub watch</code></pre>
+    <p>Each line describes one change:</p>
+    <pre class="cmd cmd-out"><code>route 4: FoH Sw MV → Switcher PGM
+output 7 label: '#7' → 'House Left'
+output 12 lock: unlocked → owned</code></pre>
+    <p>
+      Watch has no timeout of its own — it runs until you stop it with Ctrl+C, or the connection
+      drops.
+    </p>
+  </section>
+
+  <section id="scripting">
+    <h2>7. Scripting and agents</h2>
+    <p>
+      Every command accepts <code>--json</code>, which is the reliable thing to parse instead of
+      the human-readable tables and sentences shown throughout this guide. Two shapes exist:
+    </p>
+    <ul>
+      <li>
+        Every command <em>except</em> <code>watch</code> emits one JSON document per invocation —
+        an object or array on stdout, printed once, with a clear beginning and end.
+      </li>
+      <li>
+        <code>watch --json</code> emits <strong>JSON Lines</strong> instead: one JSON object per
+        line, one per update, because a live stream has no end to wrap a single document around.
+      </li>
+    </ul>
+    <p>Exit codes are consistent across every command, which makes them safe to branch on in a script:</p>
+    <ul>
+      <li><strong>0</strong> — success.</li>
+      <li>
+        <strong>1</strong> — a runtime failure: couldn't connect, timed out, the connection
+        dropped, or the device rejected a command (a NAK).
+      </li>
+      <li>
+        <strong>2</strong> — a usage error: a bad argument, an out-of-range input/output number, an
+        incompatible snapshot, or a config value that doesn't parse.
+      </li>
+    </ul>
+    <p>
+      One thing to know when experimenting with <code>watch --json</code> from a shell: piping it
+      into something that only reads the first line, like
+    </p>
+    <pre class="cmd"><code>bmd videohub watch --json | head -1</code></pre>
+    <p>
+      leaves the <code>bmd</code> process itself still running and connected in the background —
+      <code>head</code> exiting after one line doesn't signal it to stop. Press Ctrl+C, or in a
+      real script read the stream properly and let cancellation come from your own code.
+    </p>
+  </section>
+
+  <section id="known-limitations">
+    <h2>8. Known limitations</h2>
+    <ul class="limitations">
+      <li>
+        <strong>mDNS discovery does not cross subnets</strong>, and some older Videohubs predate
+        mDNS support entirely. Replies can arrive from another subnet in some network setups, but
+        the query that triggers them does not cross routers — if <code>bmd discover</code> comes
+        up empty on a hub you know is there, use
+        <code>bmd config set videohub.host &lt;address&gt;</code> instead.
+      </li>
+      <li>
+        <strong>Windows may prompt for firewall access</strong> the first time you run
+        <code>bmd discover</code>, since it listens on the network for mDNS responses. Allow it, at
+        least on private networks, or discovery will find nothing.
+      </li>
+      <li>
+        <strong><code>discover --add</code> writes the device's current numeric address</strong> —
+        if it's on DHCP and its lease changes, the saved address goes stale and you'll need to run
+        <code>discover --add</code> again (or <code>config set</code> by hand). A static address or
+        a DHCP reservation for the hub avoids this entirely.
+      </li>
+      <li>
+        <strong><code>bmd videohub watch --json | head -1</code> leaves the watch process
+        running</strong> — see <a href="#scripting">scripting and agents</a> above. Press Ctrl+C to
+        stop it.
+      </li>
+      <li>
+        <strong>Discovery has so far been verified on Windows only.</strong> The underlying mDNS
+        client is cross-platform code, but Linux and macOS haven't yet been exercised against real
+        hardware.
+      </li>
+    </ul>
+  </section>
+
+  <section id="troubleshooting">
+    <h2>9. Troubleshooting</h2>
+    <dl class="exit-codes">
+      <div><dt>Exit 0</dt><dd>Success. In a script, anything else means look at stderr.</dd></div>
+      <div><dt>Exit 1</dt><dd>A runtime failure — see below for the common ones.</dd></div>
+      <div><dt>Exit 2</dt><dd>A usage error — a bad argument, out-of-range number, or a snapshot/config value that doesn't parse. The device was never touched.</dd></div>
+    </dl>
+    <p><strong><code>error: no host configured for videohub (run: bmd config set videohub.host &lt;addr&gt;)</code></strong></p>
+    <p>
+      No address is known from <code>--host</code>, the local <code>.bmdconfig</code>, or the
+      global config. Run <a href="#connecting">discover or config set</a> as described in
+      Connecting, above.
+    </p>
+    <p><strong>A device rejection (NAK)</strong></p>
+    <p>
+      The device answered but refused the specific change — bmd reports it as
+      <code>error: device rejected &lt;description&gt;</code>. The most common cause is a locked
+      output: attempting <code>route set</code> against an output someone else has locked gets
+      refused this way. Unlock it first (<code>bmd videohub output unlock &lt;output&gt;</code>,
+      possibly with <code>--force</code>), or route a different output.
+    </p>
+    <p><strong>A timeout, or the connection dropping mid-command</strong></p>
+    <p>
+      For a single mutating command, nothing further is sent once this happens — the command
+      simply fails with exit 1. For <code>restore</code>, which can apply several changes in one
+      run, bmd stops at the first one that fails, reports how many of the planned changes actually
+      landed, and re-running <code>restore</code> is safe: it recomputes the remaining differences
+      from the device's current state rather than reapplying what already succeeded.
+    </p>
+    <p><strong>A locked output won't accept a route change</strong></p>
+    <p>
+      That's the lock working as intended — see the NAK entry above. <code>output list</code> shows
+      you the current lock state of every output if you're not sure which ones are held.
+    </p>
+  </section>
+
+  <footer>
+    <p><a href="index.html">&larr; Back to bmd</a> · <a href="https://github.com/davojc/bmdcli">Source on GitHub</a></p>
+  </footer>
+
+</div>
+</body>
+</html>

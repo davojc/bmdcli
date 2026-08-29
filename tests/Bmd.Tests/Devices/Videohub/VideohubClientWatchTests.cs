@@ -82,7 +82,7 @@ public class VideohubClientWatchTests
 
         await Task.Delay(100);
         await cts.CancelAsync();
-        await watching;   // must complete without throwing
+        await watching.WaitAsync(Timeout5);   // must complete without throwing
     }
 
     [Fact]

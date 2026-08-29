@@ -583,12 +583,7 @@ public class VideohubCommands
         return true;
     }
 
-    static string LockWord(LockState lockState) => lockState switch
-    {
-        LockState.Owned => "owned",
-        LockState.Locked => "locked",
-        _ => "unlocked",
-    };
+    static string LockWord(LockState lockState) => VideohubUpdate.Word(lockState);
 
     /// <summary>Synchronous-action convenience over <see cref="RunWithClientAsync"/>.</summary>
     Task<int> WithClientAsync(string? host, int? port, int? timeout, Func<VideohubClient, int> action)

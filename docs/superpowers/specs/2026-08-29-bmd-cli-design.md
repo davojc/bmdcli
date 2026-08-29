@@ -111,6 +111,11 @@ bmd videohub output list --json        → [{"n":1,"label":"Monitor","input":4,"
 bmd videohub route list --json         → [{"output":1,"outputLabel":"Monitor","input":4,"inputLabel":"Cam 4"}]
 ```
 
+The one exception is a streaming command (`videohub watch`): a single document
+can't represent an unbounded stream, so `--json` there emits JSON Lines — one
+compact object per line, flushed per event. Every non-streaming command still
+emits exactly one document.
+
 Errors are unaffected by `--json`: always one plain `error: ...` line on
 stderr plus the exit code (0 success / 1 operation failure / 2 usage or
 format error). Agents branch on exit code and read stderr for the reason;

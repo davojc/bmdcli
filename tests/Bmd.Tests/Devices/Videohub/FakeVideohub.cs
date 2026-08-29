@@ -245,10 +245,13 @@ public sealed class FakeVideohub : IAsyncDisposable
             try
             {
                 var stream = client.GetStream();
-                await stream.WriteAsync(Encoding.UTF8.GetBytes(RenderDump()), _cts.Token);
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+                // Register before writing the dump (the method's first await): a push issued
+                // the instant ConnectAsync returns must never race an unregistered writer and
+                // broadcast to an empty list.
                 lock (_gate) _writers.Add(writer);
+                await stream.WriteAsync(Encoding.UTF8.GetBytes(RenderDump()), _cts.Token);
                 var accumulator = new BlockAccumulator();
                 // Per-connection allowance for StartFailingAfter — a single-element array so it
                 // can be mutated from ApplyBlock (an async method, which can't take a ref parameter).

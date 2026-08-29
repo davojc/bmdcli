@@ -15,14 +15,18 @@ public class FakeVideohubPushTests
         await fake.PushRouteAsync(output: 0, input: 1);   // wire indices
 
         // the client only folds updates in while reading; read one update through the watch loop
+        var seen = new List<VideohubUpdate>();
         using var cts = new CancellationTokenSource(Timeout5);
         await foreach (var update in client.WatchAsync(cts.Token))
         {
-            Assert.Equal(VideohubUpdateKind.Route, update.Kind);
-            Assert.Equal(1, update.N);          // 1-based
-            Assert.Equal("Cam 2", update.To);   // wire input 1 → 1-based input 2
+            seen.Add(update);
             break;
         }
+
+        Assert.Single(seen);
+        Assert.Equal(VideohubUpdateKind.Route, seen[0].Kind);
+        Assert.Equal(1, seen[0].N);          // 1-based
+        Assert.Equal("Cam 2", seen[0].To);   // wire input 1 → 1-based input 2
         Assert.Equal(1, fake.Routes()[0]);
     }
 

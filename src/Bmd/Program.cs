@@ -22,5 +22,6 @@ app.Add("videohub input list", videohub.InputList);
 app.Add("videohub output list", videohub.OutputList);
 app.Add("videohub route list", videohub.RouteList);
 app.Add("videohub export", videohub.Export);
+app.Add("videohub route set", videohub.RouteSet);
 
 app.Run(args);

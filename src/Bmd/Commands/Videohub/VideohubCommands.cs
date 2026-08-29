@@ -173,6 +173,51 @@ public class VideohubCommands
         }
     }
 
+    /// <summary>Route an input to an output (both 1-based, matching the device's front panel).</summary>
+    /// <param name="output">Output to change (1-based).</param>
+    /// <param name="input">Input to route to it (1-based).</param>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> RouteSet(
+        [Argument] int output, [Argument] int input,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        {
+            var device = client.State.Device;
+            if (output < 1 || output > device.VideoOutputs)
+            {
+                Console.Error.WriteLine($"error: output must be between 1 and {device.VideoOutputs}");
+                return 2;
+            }
+            if (input < 1 || input > device.VideoInputs)
+            {
+                Console.Error.WriteLine($"error: input must be between 1 and {device.VideoInputs}");
+                return 2;
+            }
+
+            var previousInput = client.State.GetRoute(output);
+            var previousLabel = client.State.GetInputLabel(previousInput);
+            var outputLabel = client.State.GetOutputLabel(output);
+            await client.SetRouteAsync(output, input);
+            var inputLabel = client.State.GetInputLabel(input);
+
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new VideohubRouteSetResult(output, outputLabel, input, inputLabel,
+                        previousInput, previousLabel, backup),
+                    BmdJsonContext.Default.VideohubRouteSetResult));
+            else
+            {
+                Console.WriteLine($"output {output} ({outputLabel}): {previousLabel} → {inputLabel}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+
     static string LockWord(LockState lockState) => lockState switch
     {
         LockState.Owned => "owned",
@@ -246,6 +291,7 @@ public class VideohubCommands
         }
         catch (Exception ex) when (ex is SocketException or IOException or UnauthorizedAccessException
                                        or TimeoutException or VideohubProtocolException
+                                       or VideohubCommandRejectedException
                                        or SnapshotFormatException or ConfigValueException
                                        or ConfigValueFormatException)
         {

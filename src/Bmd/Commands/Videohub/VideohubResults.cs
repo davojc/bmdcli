@@ -17,3 +17,9 @@ public sealed record VideohubRouteEntry(int Output, string OutputLabel, int Inpu
 /// <summary>Result of `videohub export`: what was captured and where it went.</summary>
 public sealed record VideohubExportResult(
     string Device, int VideoInputs, int VideoOutputs, int Routes, string? File, bool Verified);
+
+/// <summary>Result of `videohub route set`: the change applied (output/input 1-based, with
+/// labels) and what it replaced, plus the pre-change backup path (null if skipped).</summary>
+public sealed record VideohubRouteSetResult(
+    int Output, string OutputLabel, int Input, string InputLabel,
+    int PreviousInput, string PreviousInputLabel, string? Backup);

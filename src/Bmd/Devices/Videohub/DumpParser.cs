@@ -23,7 +23,7 @@ public static class DumpParser
             var route = ParseInt(value, "VIDEO OUTPUT ROUTING");
             if (route < 0 || route >= device.VideoInputs)
                 throw new VideohubProtocolException(
-                    $"route for output {index} has invalid input {route} (valid range 0-{device.VideoInputs - 1})");
+                    $"route for output {index + 1} has invalid input {route} (valid range 0-{device.VideoInputs - 1})");
             routes[index] = route;
         }
         var locks = new LockState[device.VideoOutputs];

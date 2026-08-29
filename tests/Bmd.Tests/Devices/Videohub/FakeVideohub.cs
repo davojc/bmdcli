@@ -16,6 +16,7 @@ public sealed class FakeVideohub : IAsyncDisposable
     readonly Lock _gate = new();
     readonly Func<string>? _dumpFactory;      // set only by StartChanging
     readonly bool _rejectEverything;
+    readonly bool _ackFirst;
 
     // mutable server state (0-based, wire order)
     string _rawDump = "";
@@ -30,10 +31,11 @@ public sealed class FakeVideohub : IAsyncDisposable
 
     public int Port { get; }
 
-    FakeVideohub(string dump, Func<string>? dumpFactory, bool rejectEverything)
+    FakeVideohub(string dump, Func<string>? dumpFactory, bool rejectEverything, bool ackFirst = false)
     {
         _dumpFactory = dumpFactory;
         _rejectEverything = rejectEverything;
+        _ackFirst = ackFirst;
         LoadState(dump);
         _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
@@ -43,6 +45,10 @@ public sealed class FakeVideohub : IAsyncDisposable
 
     public static FakeVideohub Start(string dump = Fixtures.Dump4x4) => new(dump, null, false);
     public static FakeVideohub StartRejecting(string dump = Fixtures.Dump4x4) => new(dump, null, true);
+
+    /// <summary>A hub that ACKs a mutation BEFORE broadcasting the changed block, the reverse
+    /// of the default order — used to prove command reporting does not depend on echo timing.</summary>
+    public static FakeVideohub StartAckFirst(string dump = Fixtures.Dump4x4) => new(dump, null, false, ackFirst: true);
 
     /// <summary>A hub whose output-1 route differs on every connection — used to prove
     /// export verification retries and then fails cleanly. Does not accept mutations.</summary>
@@ -188,13 +194,7 @@ public sealed class FakeVideohub : IAsyncDisposable
             while (!_cts.IsCancellationRequested)
             {
                 var client = await _listener.AcceptTcpClientAsync(_cts.Token);
-                Task handler;
-                lock (_gate)
-                {
-                    handler = HandleClientAsync(client);
-                    _clients.Add(handler);
-                }
-                _ = handler;
+                lock (_gate) _clients.Add(HandleClientAsync(client));
             }
         }
         catch (OperationCanceledException) { }
@@ -235,8 +235,16 @@ public sealed class FakeVideohub : IAsyncDisposable
             await writer.WriteAsync("NAK\n\n");
             return;
         }
-        await writer.WriteAsync(response);
-        await writer.WriteAsync("ACK\n\n");
+        if (_ackFirst)
+        {
+            await writer.WriteAsync("ACK\n\n");
+            await writer.WriteAsync(response);
+        }
+        else
+        {
+            await writer.WriteAsync(response);
+            await writer.WriteAsync("ACK\n\n");
+        }
     }
 
     /// <summary>Validates and applies one block under the caller's lock. Returns the

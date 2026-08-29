@@ -18,7 +18,7 @@ public class VideohubCommands
     /// <summary>Show device information (model, protocol version, input/output counts).</summary>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> Info(string? host = null, int? port = null, int? timeout = null, bool json = false)
         => WithClientAsync(host, port, timeout, client =>
@@ -46,7 +46,7 @@ public class VideohubCommands
     /// <summary>List inputs (1-based) with their labels.</summary>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> InputList(string? host = null, int? port = null, int? timeout = null, bool json = false)
         => WithClientAsync(host, port, timeout, client =>
@@ -64,7 +64,7 @@ public class VideohubCommands
     /// <summary>List outputs (1-based) with label, routed input, and lock state.</summary>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> OutputList(string? host = null, int? port = null, int? timeout = null, bool json = false)
         => WithClientAsync(host, port, timeout, client =>
@@ -87,7 +87,7 @@ public class VideohubCommands
     /// <summary>List the current routing (1-based): which input feeds each output.</summary>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> RouteList(string? host = null, int? port = null, int? timeout = null, bool json = false)
         => WithClientAsync(host, port, timeout, client =>
@@ -110,7 +110,7 @@ public class VideohubCommands
     /// <param name="file">Destination file; omit to write the snapshot JSON to stdout.</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit a summary object as JSON on stdout; requires a file.</param>
     public async Task<int> Export(
         [Argument] string? file = null, string? host = null, int? port = null, int? timeout = null, bool json = false)
@@ -178,7 +178,7 @@ public class VideohubCommands
     /// <param name="input">Input to route to it (1-based).</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="noBackup">Skip the automatic pre-change backup.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> RouteSet(
@@ -223,7 +223,7 @@ public class VideohubCommands
     /// <param name="label">New label. Must not contain newlines.</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="noBackup">Skip the automatic pre-change backup.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> InputRename(
@@ -264,7 +264,7 @@ public class VideohubCommands
     /// <param name="label">New label. Must not contain newlines.</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="noBackup">Skip the automatic pre-change backup.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> OutputRename(
@@ -304,7 +304,7 @@ public class VideohubCommands
     /// <param name="output">Output to lock (1-based).</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="noBackup">Skip the automatic pre-change backup.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> OutputLock(
@@ -323,7 +323,9 @@ public class VideohubCommands
             var outputLabel = client.State.GetOutputLabel(output);
             var previousLock = LockWord(client.State.GetLock(output));
             await client.LockOutputAsync(output);
-            var lockWord = LockWord(client.State.GetLock(output));
+            // Finding 2: report from the operation, not from re-reading State — a device that
+            // ACKs before broadcasting the update would otherwise leave State stale here.
+            var lockWord = LockWord(LockState.Owned);
 
             if (json)
                 Console.WriteLine(JsonSerializer.Serialize(
@@ -342,7 +344,7 @@ public class VideohubCommands
     /// <param name="force">Clear a lock held by another controller.</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
-    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="noBackup">Skip the automatic pre-change backup.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> OutputUnlock(
@@ -361,7 +363,8 @@ public class VideohubCommands
             var outputLabel = client.State.GetOutputLabel(output);
             var previousLock = LockWord(client.State.GetLock(output));
             await client.UnlockOutputAsync(output, force);
-            var lockWord = LockWord(client.State.GetLock(output));
+            // Finding 2: report from the operation, not from re-reading State — see OutputLock.
+            var lockWord = LockWord(LockState.Unlocked);
 
             if (json)
                 Console.WriteLine(JsonSerializer.Serialize(

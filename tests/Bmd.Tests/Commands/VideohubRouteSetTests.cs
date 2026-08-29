@@ -97,9 +97,13 @@ public class VideohubRouteSetTests : IDisposable
     public async Task RouteSet_Rejected_Exit1_CleanError()
     {
         await using var fake = FakeVideohub.StartRejecting();
-        Assert.Equal(1, await Commands().RouteSet(1, 2, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(1, await Commands().RouteSet(3, 1, host: "127.0.0.1", port: fake.Port));
         Assert.Equal("", _stdout.ToString());
         Assert.StartsWith("error:", _stderr.ToString());
         Assert.DoesNotContain("   at ", _stderr.ToString());
+        // Finding 1: the user typed 3 and 1 — they must never see the raw 0-based wire pair (2 0).
+        Assert.Contains("output 3", _stderr.ToString());
+        Assert.Contains("input 1", _stderr.ToString());
+        Assert.DoesNotContain("2 0", _stderr.ToString());
     }
 }

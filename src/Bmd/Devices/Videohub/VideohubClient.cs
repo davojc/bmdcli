@@ -68,8 +68,12 @@ public sealed class VideohubClient : IAsyncDisposable
     }
 
     /// <summary>Sends one protocol block and waits for the device's ACK.
-    /// Update blocks that arrive first are folded into <see cref="State"/>.</summary>
-    public async Task SendBlockAsync(string header, IReadOnlyList<string> lines, CancellationToken cancellationToken = default)
+    /// Update blocks that arrive first are folded into <see cref="State"/>.
+    /// <paramref name="description"/>, when supplied, replaces the raw (0-based wire) rejection
+    /// message with a human, 1-based phrase — callers that talk to the device on the user's
+    /// behalf must never let a NAK message leak wire indices back to the user.</summary>
+    public async Task SendBlockAsync(string header, IReadOnlyList<string> lines,
+        CancellationToken cancellationToken = default, string? description = null)
     {
         using var cts = CancellationTokenSource.CreateLinkedTokenSource(cancellationToken);
         cts.CancelAfter(_timeout);
@@ -87,7 +91,8 @@ public sealed class VideohubClient : IAsyncDisposable
                 {
                     case "ACK": return;
                     case "NAK":
-                        throw new VideohubCommandRejectedException($"device rejected {header} ({string.Join("; ", lines)})");
+                        throw new VideohubCommandRejectedException(
+                            $"device rejected {description ?? $"{header} ({string.Join("; ", lines)})"}");
                     default:
                         ApplyUpdate(block);
                         break;
@@ -110,7 +115,8 @@ public sealed class VideohubClient : IAsyncDisposable
     {
         CheckOutput(output);
         CheckInput(input);
-        return SendBlockAsync("VIDEO OUTPUT ROUTING", [$"{output - 1} {input - 1}"], cancellationToken);
+        return SendBlockAsync("VIDEO OUTPUT ROUTING", [$"{output - 1} {input - 1}"], cancellationToken,
+            description: $"routing input {input} to output {output}");
     }
 
     /// <summary>Renames input <paramref name="input"/> (1-based).</summary>
@@ -118,7 +124,8 @@ public sealed class VideohubClient : IAsyncDisposable
     {
         CheckInput(input);
         CheckLabel(label);
-        return SendBlockAsync("INPUT LABELS", [$"{input - 1} {label}"], cancellationToken);
+        return SendBlockAsync("INPUT LABELS", [$"{input - 1} {label}"], cancellationToken,
+            description: $"renaming input {input}");
     }
 
     /// <summary>Renames output <paramref name="output"/> (1-based).</summary>
@@ -126,14 +133,16 @@ public sealed class VideohubClient : IAsyncDisposable
     {
         CheckOutput(output);
         CheckLabel(label);
-        return SendBlockAsync("OUTPUT LABELS", [$"{output - 1} {label}"], cancellationToken);
+        return SendBlockAsync("OUTPUT LABELS", [$"{output - 1} {label}"], cancellationToken,
+            description: $"renaming output {output}");
     }
 
     /// <summary>Takes the lock on output <paramref name="output"/> (1-based).</summary>
     public Task LockOutputAsync(int output, CancellationToken cancellationToken = default)
     {
         CheckOutput(output);
-        return SendBlockAsync("VIDEO OUTPUT LOCKS", [$"{output - 1} O"], cancellationToken);
+        return SendBlockAsync("VIDEO OUTPUT LOCKS", [$"{output - 1} O"], cancellationToken,
+            description: $"locking output {output}");
     }
 
     /// <summary>Releases the lock on output <paramref name="output"/> (1-based).
@@ -141,7 +150,8 @@ public sealed class VideohubClient : IAsyncDisposable
     public Task UnlockOutputAsync(int output, bool force = false, CancellationToken cancellationToken = default)
     {
         CheckOutput(output);
-        return SendBlockAsync("VIDEO OUTPUT LOCKS", [$"{output - 1} {(force ? 'F' : 'U')}"], cancellationToken);
+        return SendBlockAsync("VIDEO OUTPUT LOCKS", [$"{output - 1} {(force ? 'F' : 'U')}"], cancellationToken,
+            description: force ? $"unlocking output {output} (force)" : $"unlocking output {output}");
     }
 
     void CheckInput(int input)

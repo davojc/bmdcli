@@ -93,6 +93,26 @@ public class VideohubBackupTests : IDisposable
     }
 
     [Fact]
+    public async Task RulingSix_AutoFalseButKeepMalformed_MutationAborts_DeviceUnchanged()
+    {
+        // Controller ruling 6: backup.auto=false does not shortcut a malformed backup.keep —
+        // BackupStore.FromConfig must still run and surface the real config error before any
+        // mutation reaches the device.
+        SetConfig("backup.auto", "false");
+        SetConfig("backup.keep", "lots");
+        await using var fake = FakeVideohub.Start();
+        var before = fake.Routes().ToArray();
+
+        Assert.Equal(1, await Commands().RouteSet(3, 1, host: "127.0.0.1", port: fake.Port));
+
+        Assert.Equal(before, fake.Routes());
+        Assert.Equal("", _stdout.ToString());
+        Assert.StartsWith("error:", _stderr.ToString());
+        Assert.Contains("backup.keep", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+    }
+
+    [Fact]
     public async Task BackupsAreDeviceKeyed()
     {
         await using var fake = FakeVideohub.Start();

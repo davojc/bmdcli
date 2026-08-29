@@ -148,11 +148,44 @@ public class VideohubRenameLockTests : IDisposable
         Assert.Equal("", _stdout.ToString());
         Assert.StartsWith("error:", _stderr.ToString());
         Assert.DoesNotContain("   at ", _stderr.ToString());
+        // Finding 1: no raw 0-based wire index leaked for the rename either.
+        Assert.Contains("input 1", _stderr.ToString());
 
         _stderr.GetStringBuilder().Clear();
         Assert.Equal(1, await Commands().OutputLock(1, host: "127.0.0.1", port: fake.Port));
         Assert.Equal("", _stdout.ToString());
         Assert.StartsWith("error:", _stderr.ToString());
         Assert.DoesNotContain("   at ", _stderr.ToString());
+        Assert.Contains("output 1", _stderr.ToString());
+    }
+
+    [Fact]
+    public async Task OutputLock_AckFirst_ReportsOwned_HumanAndJson()
+    {
+        // Finding 2: report the new lock state from the operation, not from re-reading
+        // State — a device that ACKs before broadcasting the update must still be reported
+        // correctly. FakeVideohub.StartAckFirst mirrors that ordering.
+        await using var fake = FakeVideohub.StartAckFirst();
+
+        Assert.Equal(0, await Commands().OutputLock(1, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal('O', fake.Locks()[0]);
+        Assert.Contains("unlocked → owned", _stdout.ToString());
+
+        _stdout.GetStringBuilder().Clear();
+        Assert.Equal(0, await Commands().OutputLock(2, host: "127.0.0.1", port: fake.Port, json: true));
+        Assert.Equal('O', fake.Locks()[1]);
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        Assert.Equal("owned", root.GetProperty("lock").GetString());
+    }
+
+    [Fact]
+    public async Task InputRename_UnicodeEmojiLabel_RoundTrips()
+    {
+        // Minor 7: broadcast facilities are international — labels must round-trip
+        // exactly, emoji included.
+        await using var fake = FakeVideohub.Start();
+        const string label = "Kamera Zwei 🎥";
+        Assert.Equal(0, await Commands().InputRename(1, label, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(label, fake.InputLabels()[0]);
     }
 }

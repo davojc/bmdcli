@@ -87,4 +87,17 @@ public class VideohubClientMutationTests
         await Assert.ThrowsAsync<ArgumentException>(() => client.RenameInputAsync(1, label));
         Assert.Equal("Cam 1", fake.InputLabels()[0]);
     }
+
+    [Fact]
+    public async Task RenameInput_UnicodeEmojiLabel_RoundTrips()
+    {
+        // Minor 7: broadcast facilities are international — labels must round-trip
+        // exactly, emoji included.
+        var (fake, client) = await ConnectAsync();
+        await using var _ = fake;
+        await using var __ = client;
+        await client.RenameInputAsync(1, "Kamera Zwei 🎥");
+        Assert.Equal("Kamera Zwei 🎥", fake.InputLabels()[0]);
+        Assert.Equal("Kamera Zwei 🎥", client.State.GetInputLabel(1));
+    }
 }

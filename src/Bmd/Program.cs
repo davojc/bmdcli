@@ -28,4 +28,7 @@ app.Add("videohub output rename", videohub.OutputRename);
 app.Add("videohub output lock", videohub.OutputLock);
 app.Add("videohub output unlock", videohub.OutputUnlock);
 
+if (GroupHelp.TryWrite(args, Console.Out)) return 0;
+
 app.Run(args);
+return Environment.ExitCode;

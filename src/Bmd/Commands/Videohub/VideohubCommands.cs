@@ -184,6 +184,32 @@ public class VideohubCommands
     Task<int> WithClientAsync(string? host, int? port, int? timeout, Func<VideohubClient, int> action)
         => RunWithClientAsync(host, port, timeout, client => Task.FromResult(action(client)));
 
+    /// <summary>Connects, backs up the pre-change state unless disabled, then runs the action.
+    /// A failed backup aborts before the action runs.</summary>
+    Task<int> WithBackedUpClientAsync(
+        string? host, int? port, int? timeout, bool noBackup,
+        Func<VideohubClient, string?, Task<int>> action)
+        => RunWithClientAsync(host, port, timeout, async client =>
+        {
+            string? backupPath = null;
+            if (!noBackup)
+            {
+                var store = BackupStore.FromConfig(_loadConfig());
+                if (store.AutoBackupEnabled)
+                {
+                    var snapshot = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow);
+                    backupPath = store.Write(
+                        BackupStore.DeviceKey(client.Host, client.State.Device.ModelName), snapshot);
+                }
+            }
+            return await action(client, backupPath);
+        });
+
+    /// <summary>Test seam: exercises the backup path with a supplied action.</summary>
+    internal Task<int> BackupProbeAsync(
+        string host, int port, bool noBackup, Func<VideohubClient, string?, Task<int>> action)
+        => WithBackedUpClientAsync(host, port, null, noBackup, action);
+
     /// <summary>Resolves the connection from flags then config, connects, runs the action,
     /// and maps every expected failure to one stderr line plus an exit code.</summary>
     Task<int> RunWithClientAsync(

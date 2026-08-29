@@ -199,15 +199,50 @@ public class DiscoverCommandsTests : IDisposable
     }
 
     [Fact]
-    public async Task Add_Json_EmitsConfigSetResultShape()
+    public async Task Add_Json_EmitsSingleConfigSetResultArray()
     {
+        // One JSON document, always — even the one-key case is a single-element array, not a
+        // bare object, so a script never has to branch on whether a port was also written.
         SetIn("1\n");
         Assert.Equal(0, await Commands([Hub]).Discover(add: true, json: true));
 
-        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
-        Assert.Equal("videohub.host", root.GetProperty("key").GetString());
-        Assert.Equal("192.168.1.10", root.GetProperty("value").GetString());
-        Assert.Equal(LocalConfigPath, root.GetProperty("file").GetString());
+        var text = _stdout.ToString().Trim();
+        Assert.Single(text.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+
+        var root = JsonDocument.Parse(text).RootElement;
+        Assert.Equal(JsonValueKind.Array, root.ValueKind);
+        Assert.Equal(1, root.GetArrayLength());
+        var entry = root[0];
+        Assert.Equal("videohub.host", entry.GetProperty("key").GetString());
+        Assert.Equal("192.168.1.10", entry.GetProperty("value").GetString());
+        Assert.Equal(LocalConfigPath, entry.GetProperty("file").GetString());
+    }
+
+    [Fact]
+    public async Task Add_Json_NonDefaultPort_EmitsOneArrayWithBothEntries()
+    {
+        // The coverage gap that let the JSON Lines bug ship: a device on a non-default port
+        // writes two keys, and the whole point of the fix is that this is still exactly one
+        // JSON document — a two-element array — not two documents on two lines.
+        SetIn("1\n");
+        Assert.Equal(0, await Commands([HubOddPort]).Discover(add: true, json: true));
+
+        var text = _stdout.ToString().Trim();
+        Assert.Single(text.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+
+        var root = JsonDocument.Parse(text).RootElement;
+        Assert.Equal(JsonValueKind.Array, root.ValueKind);
+        Assert.Equal(2, root.GetArrayLength());
+
+        var host = root[0];
+        Assert.Equal("videohub.host", host.GetProperty("key").GetString());
+        Assert.Equal("192.168.1.12", host.GetProperty("value").GetString());
+        Assert.Equal(LocalConfigPath, host.GetProperty("file").GetString());
+
+        var port = root[1];
+        Assert.Equal("videohub.port", port.GetProperty("key").GetString());
+        Assert.Equal("9991", port.GetProperty("value").GetString());
+        Assert.Equal(LocalConfigPath, port.GetProperty("file").GetString());
     }
 
     [Theory]

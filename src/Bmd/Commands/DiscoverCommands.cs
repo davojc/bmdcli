@@ -157,14 +157,22 @@ public class DiscoverCommands
         try
         {
             var store = _loadConfig();
+            var results = new List<ConfigSetResult>(toSet.Count);
             foreach (var (key, value) in toSet)
             {
                 var file = store.Set(key, value, global);
                 if (json)
-                    Console.WriteLine(JsonSerializer.Serialize(new ConfigSetResult(key.ToString(), value, file), BmdJsonContext.Default.ConfigSetResult));
+                    results.Add(new ConfigSetResult(key.ToString(), value, file));
                 else
                     Console.WriteLine($"Set {key} = {value} in {file}");
             }
+            // Every non-streaming command emits exactly one JSON document (see the spec's
+            // "Agents and scripting" section) — one or two keys are written here (host, plus
+            // port when it isn't the default), so the results are collected and emitted as a
+            // single array rather than one document per key, which would produce JSON Lines
+            // and silently break `| jq` for the two-key case.
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(results.ToArray(), BmdJsonContext.Default.ConfigSetResultArray));
             return 0;
         }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)

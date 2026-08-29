@@ -10,6 +10,7 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(DiscoveredDeviceResult[]))]
 [JsonSerializable(typeof(ConfigGetResult))]
 [JsonSerializable(typeof(ConfigSetResult))]
+[JsonSerializable(typeof(ConfigSetResult[]))]
 [JsonSerializable(typeof(ConfigUnsetResult))]
 [JsonSerializable(typeof(ConfigEntry[]))]
 [JsonSerializable(typeof(VideohubInfoResult))]

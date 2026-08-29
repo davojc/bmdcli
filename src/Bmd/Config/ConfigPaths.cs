@@ -24,6 +24,23 @@ public static class ConfigPaths
         }
     }
 
+    /// <summary>OS state directory for data bmd keeps between runs (backups) —
+    /// distinct from config (settings) and cache (disposable).</summary>
+    public static string StateDirectory
+    {
+        get
+        {
+            if (OperatingSystem.IsWindows())
+                return Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.LocalApplicationData), "bmd");
+            var xdg = Environment.GetEnvironmentVariable("XDG_STATE_HOME");
+            return string.IsNullOrEmpty(xdg)
+                ? Path.Combine(
+                    Environment.GetFolderPath(Environment.SpecialFolder.UserProfile), ".local", "state", "bmd")
+                : Path.Combine(xdg, "bmd");
+        }
+    }
+
     public static string? FindLocalConfig(string startDirectory)
     {
         for (var dir = new DirectoryInfo(startDirectory); dir is not null; dir = dir.Parent)

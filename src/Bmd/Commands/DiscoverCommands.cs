@@ -94,7 +94,7 @@ public class DiscoverCommands
         if (json)
         {
             var results = shown
-                .Select(d => new DiscoveredDeviceResult(d.Name, d.DeviceClass, d.DeviceType, d.Address.ToString(), d.Port))
+                .Select(d => new DiscoveredDeviceResult(d.Name, d.DeviceClass, d.DeviceType, d.Address.ToString(), d.Port, d.TxtEntries))
                 .ToArray();
             Console.WriteLine(JsonSerializer.Serialize(results, BmdJsonContext.Default.DiscoveredDeviceResultArray));
             return 0;
@@ -106,8 +106,16 @@ public class DiscoverCommands
             return 0;
         }
 
+        // TXT entries are only shown under --all (the diagnostic listing); the default table
+        // stays exactly as clean as it is today. Passing null (rather than an all-empty details
+        // array) when !all also means the default path never touches TxtEntries at all.
+        IReadOnlyList<IReadOnlyList<string>>? details = all
+            ? shown.Select(d => (IReadOnlyList<string>)d.TxtEntries.Select(TxtLineForDisplay).ToArray()).ToArray()
+            : null;
+
         Table.Write(["NAME", "TYPE", "ADDRESS"],
-            shown.Select(d => (IReadOnlyList<string>)[d.Name, TypeCell(d), AddressCell(d)]).ToArray());
+            shown.Select(d => (IReadOnlyList<string>)[d.Name, TypeCell(d), AddressCell(d)]).ToArray(),
+            details);
         return 0;
     }
 
@@ -216,4 +224,22 @@ public class DiscoverCommands
         device.Address.AddressFamily == AddressFamily.InterNetworkV6
             ? $"[{device.Address}]:{device.Port}"
             : $"{device.Address}:{device.Port}";
+
+    /// <summary>Indented four spaces beneath a device's table row under <c>--all</c>. TXT
+    /// entries come straight off the network, so <see cref="SanitizeForDisplay"/> guards the
+    /// terminal against a literal newline (which would otherwise fake an extra row and break the
+    /// one-line-per-entry layout) or a raw control/escape byte (which could otherwise manipulate
+    /// the terminal itself). This only affects what gets printed here — <c>DiscoveredDevice</c>
+    /// and the JSON output both keep the entry exactly as advertised.</summary>
+    static string TxtLineForDisplay(string entry) => "    " + SanitizeForDisplay(entry);
+
+    /// <summary>Replaces every control character (a literal newline, carriage return, tab, ESC,
+    /// or any other C0/C1 control code) with the Unicode replacement character, leaving
+    /// everything else untouched. See <see cref="TxtLineForDisplay"/> for why.</summary>
+    static string SanitizeForDisplay(string value) =>
+        string.Create(value.Length, value, static (span, source) =>
+        {
+            for (var i = 0; i < source.Length; i++)
+                span[i] = char.IsControl(source[i]) ? '�' : source[i];
+        });
 }

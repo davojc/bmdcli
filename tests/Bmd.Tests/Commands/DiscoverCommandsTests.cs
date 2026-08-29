@@ -1,3 +1,4 @@
+using System.Linq;
 using System.Net;
 using System.Net.NetworkInformation;
 using System.Net.Sockets;
@@ -30,6 +31,17 @@ public class DiscoverCommandsTests : IDisposable
         new("Hub Odd Port", "Videohub", "videohub", IPAddress.Parse("192.168.1.12"), 9991);
     static readonly DiscoveredDevice Unsupported =
         new("Switcher", "AtemSwitcher", null, IPAddress.Parse("192.168.1.20"), 9910);
+    static readonly DiscoveredDevice HubWithTxt =
+        new("Hub One", "Videohub", "videohub", IPAddress.Parse("192.168.1.10"), 9990,
+            ["class=Videohub", "name=Hub One", "nic=1"]);
+    static readonly DiscoveredDevice NoTxtBridge =
+        new("Streaming Bridge", "", null, IPAddress.Parse("192.168.1.30"), 9977);
+    // "evil=" carries an embedded newline plus an ANSI escape sequence (\u001b[31m ... \u001b[0m)
+    // that would recolor terminal output — proof that the human table sanitizes what it prints
+    // rather than passing raw network bytes straight to the terminal.
+    static readonly DiscoveredDevice HubWithHostileTxt =
+        new("Hub One", "Videohub", "videohub", IPAddress.Parse("192.168.1.10"), 9990,
+            ["class=Videohub", "evil=line1\nline2\u001b[31mFAKE ROW\u001b[0m"]);
 
     public DiscoverCommandsTests()
     {
@@ -91,6 +103,99 @@ public class DiscoverCommandsTests : IDisposable
         Assert.Equal("videohub", entry.GetProperty("deviceType").GetString());
         Assert.Equal("192.168.1.10", entry.GetProperty("address").GetString());
         Assert.Equal(9990, entry.GetProperty("port").GetInt32());
+    }
+
+    [Fact]
+    public async Task Discover_Json_All_IncludesTxtArray()
+    {
+        Assert.Equal(0, await Commands([HubWithTxt]).Discover(all: true, json: true));
+        var text = _stdout.ToString();
+        Assert.Single(text.Split('\n', StringSplitOptions.RemoveEmptyEntries)); // one JSON document
+        var root = JsonDocument.Parse(text).RootElement;
+        var entry = root[0];
+        var txt = entry.GetProperty("txt");
+        Assert.Equal(JsonValueKind.Array, txt.ValueKind);
+        Assert.Equal(["class=Videohub", "name=Hub One", "nic=1"], txt.EnumerateArray().Select(e => e.GetString()));
+    }
+
+    [Fact]
+    public async Task Discover_Json_Default_AlsoIncludesTxtArray()
+    {
+        // The field is unconditional — present in the default (non --all) JSON shape too, not
+        // gated behind --all, so a script never has to branch its parsing on which flags ran.
+        Assert.Equal(0, await Commands([HubWithTxt]).Discover(json: true));
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        var txt = root[0].GetProperty("txt");
+        Assert.Equal(["class=Videohub", "name=Hub One", "nic=1"], txt.EnumerateArray().Select(e => e.GetString()));
+    }
+
+    [Fact]
+    public async Task Discover_Json_NoTxtEntries_IsEmptyArray()
+    {
+        Assert.Equal(0, await Commands([NoTxtBridge]).Discover(all: true, json: true));
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        var txt = root[0].GetProperty("txt");
+        Assert.Equal(JsonValueKind.Array, txt.ValueKind);
+        Assert.Equal(0, txt.GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Discover_All_Human_PrintsTxtEntriesIndentedUnderDeviceRow()
+    {
+        Assert.Equal(0, await Commands([HubWithTxt, NoTxtBridge]).Discover(all: true));
+        var lines = _stdout.ToString().Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+
+        var rowIndex = Array.FindIndex(lines, l => l.Contains("Hub One"));
+        Assert.True(rowIndex >= 0);
+        Assert.Equal("    class=Videohub", lines[rowIndex + 1]);
+        Assert.Equal("    name=Hub One", lines[rowIndex + 2]);
+        Assert.Equal("    nic=1", lines[rowIndex + 3]);
+
+        // The next real content line is the other device's row — no leaked indented lines for
+        // a device that reported no TXT entries.
+        Assert.Contains("Streaming Bridge", lines[rowIndex + 4]);
+    }
+
+    [Fact]
+    public async Task Discover_All_Human_HostileTxtEntry_DoesNotCorruptTheTable()
+    {
+        // A TXT entry with an embedded newline and an ANSI escape sequence must not fake an
+        // extra table row or leak a raw escape byte onto the terminal — the entry is one
+        // sanitized line, and nothing else on stdout changes.
+        Assert.Equal(0, await Commands([HubWithHostileTxt]).Discover(all: true));
+        var stdout = _stdout.ToString();
+        Assert.DoesNotContain('\u001b', stdout);
+        var lines = stdout.Split('\n').Select(l => l.TrimEnd('\r')).ToArray();
+        var rowIndex = Array.FindIndex(lines, l => l.Contains("Hub One"));
+        Assert.True(rowIndex >= 0);
+        Assert.Equal("    class=Videohub", lines[rowIndex + 1]);
+        // The newline inside "evil=" must not split into two lines of stdout — sanitized to a
+        // single line beneath the row, replacement character standing in for the raw newline.
+        Assert.Equal("    evil=line1�line2�[31mFAKE ROW�[0m", lines[rowIndex + 2]);
+    }
+
+    [Fact]
+    public async Task Discover_Json_HostileTxtEntry_IsPreservedVerbatim_AndStillOneDocument()
+    {
+        // JSON string escaping already makes control characters and newlines safe — the raw
+        // wire content is preserved exactly (no sanitizing needed there, unlike the human
+        // table), and the whole output remains exactly one JSON document.
+        Assert.Equal(0, await Commands([HubWithHostileTxt]).Discover(all: true, json: true));
+        var text = _stdout.ToString();
+        Assert.Single(text.Split('\n', StringSplitOptions.RemoveEmptyEntries));
+        var root = JsonDocument.Parse(text).RootElement;
+        var entries = root[0].GetProperty("txt").EnumerateArray().Select(e => e.GetString()).ToArray();
+        Assert.Equal("class=Videohub", entries[0]);
+        Assert.Equal("evil=line1\nline2\u001b[31mFAKE ROW\u001b[0m", entries[1]);
+    }
+
+    [Fact]
+    public async Task Discover_Default_Human_DoesNotPrintTxtEntries()
+    {
+        Assert.Equal(0, await Commands([HubWithTxt]).Discover());
+        var text = _stdout.ToString();
+        Assert.DoesNotContain("class=Videohub", text);
+        Assert.DoesNotContain("nic=1", text);
     }
 
     [Fact]

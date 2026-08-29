@@ -142,6 +142,34 @@ public class DiscoveredDeviceTests
     }
 
     [Fact]
+    public void FromRecords_TxtEntries_AreSurfacedVerbatimInAdvertisedOrder()
+    {
+        // Includes an entry with no '=' at all and one whose value itself contains '=' — both
+        // must survive untouched, since this property carries the raw wire content, not a
+        // reparsed/reinterpreted view of it.
+        var instance = "Studio Hub._blackmagic._tcp.local";
+        var target = "studio-hub.local";
+        var records = new List<DnsRecord>
+        {
+            new PtrRecord("_blackmagic._tcp.local", instance),
+            new SrvRecord(instance, target, 9990),
+            new TxtRecord(instance, ["class=Videohub", "name=Studio Hub", "nokey", "key=a=b=c"]),
+            new ARecord(target, Address),
+        };
+
+        var device = Assert.Single(DeviceAssembler.FromRecords(records));
+        Assert.Equal(["class=Videohub", "name=Studio Hub", "nokey", "key=a=b=c"], device.TxtEntries);
+    }
+
+    [Fact]
+    public void FromRecords_NoTxtRecord_TxtEntriesIsEmpty_NotNull()
+    {
+        var device = Assert.Single(DeviceAssembler.FromRecords(Records(deviceClass: null, name: null)));
+        Assert.NotNull(device.TxtEntries);
+        Assert.Empty(device.TxtEntries);
+    }
+
+    [Fact]
     public void FromRecords_ServiceFilter_ExcludesSrvNotAdmittedByAnyQueriedPtr()
     {
         // No PTR record at all admits this SRV — as would happen for an SRV/A pair pooled

@@ -6,8 +6,23 @@ namespace Bmd.Devices.Discovery;
 /// group (currently only <c>"videohub"</c>) when <see cref="DeviceClass"/> is recognized,
 /// else <c>null</c> for an unsupported or unknown class. An unrecognized class is never an
 /// error and is never guessed into a supported type — the device still appears, just
-/// untyped.</summary>
-public sealed record DiscoveredDevice(string Name, string DeviceClass, string? DeviceType, IPAddress Address, int Port);
+/// untyped. <see cref="TxtEntries"/> carries the device's TXT record verbatim, in the order
+/// advertised — every <c>key=value</c> string as received, not just the <c>class=</c>/<c>name=</c>
+/// pair this type otherwise derives; it is empty (never <c>null</c>) when the device sent no
+/// TXT record at all. This is what lets <c>--all</c> show what a device with no recognized
+/// <c>class=</c> reports, and is the raw material any future device-type support would key off
+/// of.</summary>
+public sealed record DiscoveredDevice(
+    string Name, string DeviceClass, string? DeviceType, IPAddress Address, int Port,
+    IReadOnlyList<string> TxtEntries)
+{
+    /// <summary>Convenience constructor for the common case of no TXT entries (or when a
+    /// caller already extracted <see cref="DeviceClass"/>/<see cref="Name"/> and has nothing
+    /// further to carry) — equivalent to passing an empty collection for
+    /// <see cref="TxtEntries"/>.</summary>
+    public DiscoveredDevice(string Name, string DeviceClass, string? DeviceType, IPAddress Address, int Port)
+        : this(Name, DeviceClass, DeviceType, Address, Port, []) { }
+}
 
 /// <summary>Maps a device's mDNS TXT <c>class=</c> value to the bmd device group it belongs to.</summary>
 public static class DeviceClasses
@@ -101,8 +116,10 @@ public static class DeviceAssembler
 
             string deviceClass = "";
             string? name = null;
+            IReadOnlyList<string> txtEntries = [];
             if (txtByName.TryGetValue(srv.Name, out var txt))
             {
+                txtEntries = txt.Entries;
                 foreach (var entry in txt.Entries)
                 {
                     int eq = entry.IndexOf('=');
@@ -115,7 +132,7 @@ public static class DeviceAssembler
             }
 
             name ??= InstanceLabel(srv.Name);
-            devices.Add(new DiscoveredDevice(name, deviceClass, DeviceClasses.DeviceTypeFor(deviceClass), address, srv.Port));
+            devices.Add(new DiscoveredDevice(name, deviceClass, DeviceClasses.DeviceTypeFor(deviceClass), address, srv.Port, txtEntries));
         }
 
         return devices;

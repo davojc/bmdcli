@@ -36,13 +36,18 @@ public static class RestorePlan
                 changes.Add(new RestoreChange(RestoreChangeKind.OutputLabel, output.N, current, output.Label));
         }
 
+        // The route's To label comes from the SNAPSHOT's input labels, not the device's current
+        // ones: restore always applies label differences too, so if this restore also renames
+        // the target input, the snapshot's label is what it will actually be called once the
+        // restore finishes — not whatever the device currently calls it (Finding 4).
+        var snapshotInputLabels = snapshot.Inputs.ToDictionary(i => i.N, i => i.Label);
         foreach (var output in snapshot.Outputs.OrderBy(o => o.N))
         {
             var currentInput = state.GetRoute(output.N);
             if (currentInput == output.Input) continue;
             changes.Add(new RestoreChange(
                 RestoreChangeKind.Route, output.N,
-                state.GetInputLabel(currentInput), state.GetInputLabel(output.Input), output.Input));
+                state.GetInputLabel(currentInput), snapshotInputLabels[output.Input], output.Input));
         }
 
         return changes;

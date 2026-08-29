@@ -16,6 +16,7 @@ public class VideohubRestoreTests : IDisposable
     readonly StringWriter _stderr = new();
     readonly TextWriter _origOut = Console.Out;
     readonly TextWriter _origErr = Console.Error;
+    readonly TextReader _origIn = Console.In;
 
     string GlobalPath => Path.Combine(_root, "global", "config");
     string WorkDir => Path.Combine(_root, "work");
@@ -33,6 +34,7 @@ public class VideohubRestoreTests : IDisposable
     {
         Console.SetOut(_origOut);
         Console.SetError(_origErr);
+        Console.SetIn(_origIn);
         Directory.Delete(_root, recursive: true);
     }
 
@@ -186,15 +188,34 @@ public class VideohubRestoreTests : IDisposable
     }
 
     [Fact]
-    public async Task Restore_InvalidSnapshotIndices_Exit1_BeforeTouchingDevice()
+    public async Task Restore_InvalidSnapshotIndices_Exit2_BeforeTouchingDevice()
     {
+        // Finding 3: bad file CONTENT (malformed JSON, invalid indices, an incompatible
+        // snapshot) is a usage/format error → exit 2. Only a file that cannot be READ
+        // (missing, permission denied) is exit 1.
         await using var fake = FakeVideohub.Start();
         var file = InvalidIndicesSnapshotFile();
         var before = fake.Routes();
 
-        Assert.Equal(1, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(2, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port));
 
         Assert.Contains("99", _stderr.ToString());
+        Assert.Equal(before, fake.Routes());
+    }
+
+    [Fact]
+    public async Task Restore_MalformedJson_Exit2_BeforeTouchingDevice()
+    {
+        await using var fake = FakeVideohub.Start();
+        var file = Path.Combine(WorkDir, "malformed.json");
+        File.WriteAllText(file, "{ this is not valid json");
+        var before = fake.Routes();
+
+        Assert.Equal(2, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port));
+
+        Assert.Equal("", _stdout.ToString());
+        Assert.StartsWith("error:", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
         Assert.Equal(before, fake.Routes());
     }
 
@@ -274,5 +295,80 @@ public class VideohubRestoreTests : IDisposable
         Assert.Contains("applied 1 of 2", _stderr.ToString());
         Assert.Equal("Aux", fake.OutputLabels()[3]);        // landed this run
         Assert.Equal(0, fake.Routes()[0]);                  // still the last remaining change
+    }
+
+    [Fact]
+    public async Task Restore_Disconnected_StopsAndReportsProgress()
+    {
+        // Finding 1: a mid-restore disconnect (the likeliest real failure) must report progress
+        // and a resume hint exactly like the timeout and rejection paths do — not fall through
+        // to a bare "error:" line with no applied-count.
+        // Three changes required: input label, output label, route (RestorePlan's order) — the
+        // fake's allowance of 1 lets only the first (the input label) land before it drops.
+        var dump = Fixtures.Dump4x4
+            .Replace("0 Cam 1", "0 Camera One")
+            .Replace("3 Aux", "3 Auxiliary")
+            .Replace("VIDEO OUTPUT ROUTING:\n0 3", "VIDEO OUTPUT ROUTING:\n0 0");
+        await using var fake = FakeVideohub.StartDroppingAfter(1, dump);
+        var file = SnapshotFile();
+
+        Assert.Equal(1, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port));
+
+        Assert.Contains("error:", _stderr.ToString());
+        Assert.Contains("applied 1 of", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+        Assert.Equal("Cam 1", fake.InputLabels()[0]); // the first change did land before the drop
+    }
+
+    [Fact]
+    public async Task Restore_Stalled_TimesOut_AndSendsNoFurtherBlocks()
+    {
+        // Finding 2 (binding note 2): once a block's ACK is never seen, framing on the
+        // connection is undefined, so the loop must stop immediately rather than send another
+        // block. The load-bearing assertion is the fake's received-block count: it must never
+        // exceed the one it stalled on.
+        var dump = Fixtures.Dump4x4
+            .Replace("0 Cam 1", "0 Camera One")
+            .Replace("3 Aux", "3 Auxiliary")
+            .Replace("VIDEO OUTPUT ROUTING:\n0 3", "VIDEO OUTPUT ROUTING:\n0 0");
+        await using var fake = FakeVideohub.StartStallingAfter(1, dump);
+        var file = SnapshotFile();
+
+        Assert.Equal(1, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port, timeout: 1));
+
+        Assert.Contains("timed out", _stderr.ToString());
+        Assert.Contains("applied 1 of", _stderr.ToString());
+        // The first (ACKed) block, plus the one the fake stalled on — nothing further.
+        Assert.Equal(2, fake.ReceivedMutationCount());
+    }
+
+    [Fact]
+    public async Task Restore_ReadsSnapshotFromStdin_WhenFileIsDash()
+    {
+        await using var fake = FakeVideohub.Start();
+        var snapshot = VideohubSnapshot.FromState(
+            DumpParser.Parse(BlockReader.ReadBlocks(Fixtures.Dump4x4)), Stamp);
+        Console.SetIn(new StringReader(snapshot.ToJson()));
+
+        Assert.Equal(0, await Commands().Restore("-", host: "127.0.0.1", port: fake.Port));
+
+        Assert.Contains("nothing to do", _stdout.ToString());
+    }
+
+    [Fact]
+    public async Task Restore_DryRunJson_ReportsZeroAppliedAndNoDeviceChange()
+    {
+        var dump = Fixtures.Dump4x4.Replace("VIDEO OUTPUT ROUTING:\n0 3", "VIDEO OUTPUT ROUTING:\n0 0");
+        await using var fake = FakeVideohub.Start(dump);
+        var file = SnapshotFile();
+        var before = fake.Routes();
+
+        Assert.Equal(0, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port, dryRun: true, json: true));
+
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        Assert.True(root.GetProperty("dryRun").GetBoolean());
+        Assert.Equal(0, root.GetProperty("applied").GetInt32());
+        Assert.Equal(1, root.GetProperty("changes").GetInt32());
+        Assert.Equal(before, fake.Routes());
     }
 }

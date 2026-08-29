@@ -192,7 +192,15 @@ public class VideohubCommands
             var text = file == "-" ? Console.In.ReadToEnd() : File.ReadAllText(file);
             snapshot = VideohubSnapshot.FromJson(text);
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SnapshotFormatException)
+        catch (SnapshotFormatException ex)
+        {
+            // Bad file CONTENT (malformed JSON, invalid indices) is a usage/format error, same
+            // family as the incompatible-device check below — exit 2. Only a file that could
+            // not be READ (missing, permission denied) is exit 1; see the catch below.
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return Task.FromResult(2);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             Console.Error.WriteLine($"error: {ex.Message}");
             return Task.FromResult(1);
@@ -252,7 +260,7 @@ public class VideohubCommands
                 // let the caller re-run: the next connection recomputes the diff from fresh
                 // state, so it resumes rather than repeats.
                 Console.Error.WriteLine(
-                    $"error: timed out after applying {applied} of {changes.Count} changes; re-run to resume");
+                    $"error: timed out; applied {applied} of {changes.Count} changes; re-run to resume");
                 return 1;
             }
             catch (VideohubCommandRejectedException ex)
@@ -264,6 +272,17 @@ public class VideohubCommands
                 // timeout path so the applied count is never silently lost on this path either.
                 Console.Error.WriteLine(
                     $"error: {ex.Message}; applied {applied} of {changes.Count} changes before stopping");
+                return 1;
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or VideohubProtocolException)
+            {
+                // The hub going away mid-restore — a dropped socket (IOException/SocketException)
+                // or the connection closing cleanly (VideohubProtocolException) — is the likeliest
+                // real mid-restore failure. Framing on this connection is now undefined, exactly
+                // as after a timeout, so stop immediately and report progress the same way: the
+                // underlying reason, the applied count, and that re-running resumes.
+                Console.Error.WriteLine(
+                    $"error: {ex.Message}; applied {applied} of {changes.Count} changes; re-run to resume");
                 return 1;
             }
 

@@ -18,6 +18,9 @@ public sealed class FakeVideohub : IAsyncDisposable
     readonly bool _rejectEverything;
     readonly bool _ackFirst;
     readonly int? _failAfter;                 // set only by StartFailingAfter
+    readonly int? _dropAfter;                 // set only by StartDroppingAfter
+    readonly int? _stallAfter;                // set only by StartStallingAfter
+    int _receivedMutationCount;               // every mutation block read off the wire, any outcome
 
     // mutable server state (0-based, wire order)
     string _rawDump = "";
@@ -32,12 +35,15 @@ public sealed class FakeVideohub : IAsyncDisposable
 
     public int Port { get; }
 
-    FakeVideohub(string dump, Func<string>? dumpFactory, bool rejectEverything, bool ackFirst = false, int? failAfter = null)
+    FakeVideohub(string dump, Func<string>? dumpFactory, bool rejectEverything, bool ackFirst = false,
+        int? failAfter = null, int? dropAfter = null, int? stallAfter = null)
     {
         _dumpFactory = dumpFactory;
         _rejectEverything = rejectEverything;
         _ackFirst = ackFirst;
         _failAfter = failAfter;
+        _dropAfter = dropAfter;
+        _stallAfter = stallAfter;
         LoadState(dump);
         _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
@@ -54,6 +60,18 @@ public sealed class FakeVideohub : IAsyncDisposable
     /// partway through resumes (rather than repeats or re-diverges) on the next connection.</summary>
     public static FakeVideohub StartFailingAfter(int successfulMutations, string dump = Fixtures.Dump4x4) =>
         new(dump, null, false, failAfter: successfulMutations);
+
+    /// <summary>A hub that ACKs the first <paramref name="successfulMutations"/> mutation blocks
+    /// on the connection, then abruptly closes it instead of replying to the next one — used to
+    /// prove a mid-restore disconnect still reports progress and a resume hint.</summary>
+    public static FakeVideohub StartDroppingAfter(int successfulMutations, string dump = Fixtures.Dump4x4) =>
+        new(dump, null, false, dropAfter: successfulMutations);
+
+    /// <summary>A hub that ACKs the first <paramref name="successfulMutations"/> mutation blocks,
+    /// then reads a further block and never replies — used to prove the client's own timeout
+    /// fires and that no further block is sent on that connection afterwards.</summary>
+    public static FakeVideohub StartStallingAfter(int successfulMutations, string dump = Fixtures.Dump4x4) =>
+        new(dump, null, false, stallAfter: successfulMutations);
 
     /// <summary>A hub that ACKs a mutation BEFORE broadcasting the changed block, the reverse
     /// of the default order — used to prove command reporting does not depend on echo timing.</summary>
@@ -75,6 +93,10 @@ public sealed class FakeVideohub : IAsyncDisposable
     public IReadOnlyList<string> InputLabels() { lock (_gate) return _inputLabels.ToArray(); }
     public int[] Routes() { lock (_gate) return _routes.ToArray(); }
     public char[] Locks() { lock (_gate) return _locks.ToArray(); }
+
+    /// <summary>Count of mutation blocks actually read off the wire, regardless of outcome
+    /// (ACKed, NAKed, dropped, or stalled) — used to prove no block was sent after a stall.</summary>
+    public int ReceivedMutationCount() { lock (_gate) return _receivedMutationCount; }
 
     void LoadState(string dump)
     {
@@ -226,7 +248,7 @@ public sealed class FakeVideohub : IAsyncDisposable
                 while (await reader.ReadLineAsync(_cts.Token) is { } line)
                 {
                     if (accumulator.Add(line) is not { } block) continue;
-                    await ApplyBlock(block, writer, successfulMutations);
+                    if (!await ApplyBlock(block, writer, client, successfulMutations)) break;
                 }
             }
             catch (OperationCanceledException) { }
@@ -234,20 +256,45 @@ public sealed class FakeVideohub : IAsyncDisposable
         }
     }
 
-    async Task ApplyBlock(ProtocolBlock block, StreamWriter writer, int[] successfulMutations)
+    /// <summary>Applies (or refuses) one mutation block. Returns false only when the connection
+    /// was deliberately dropped (the socket is now closed, so the caller's read loop must stop
+    /// rather than read from it again); true otherwise, including the stalled case, where the
+    /// loop harmlessly goes back to awaiting a line that a correctly-behaving client never sends.</summary>
+    async Task<bool> ApplyBlock(ProtocolBlock block, StreamWriter writer, TcpClient client, int[] successfulMutations)
     {
         string? response;
+        bool shouldDrop;
+        bool shouldStall;
         lock (_gate)
         {
+            _receivedMutationCount++;
+            shouldStall = _stallAfter is int stallLimit && successfulMutations[0] >= stallLimit;
+            shouldDrop = _dropAfter is int dropLimit && successfulMutations[0] >= dropLimit;
             var overAllowance = _failAfter is int limit && successfulMutations[0] >= limit;
-            response = _rejectEverything || overAllowance ? null : TryApply(block);
+            response = _rejectEverything || overAllowance || shouldDrop || shouldStall ? null : TryApply(block);
             if (response is not null) successfulMutations[0]++;
+        }
+
+        if (shouldStall)
+        {
+            // Never reply, and leave the connection open — the client's own timeout is what
+            // unblocks it, exactly as a real stalled device would. The read loop simply goes
+            // back to (indefinitely) awaiting a next line; a correctly-behaving client never
+            // sends one, and the fake's disposal (cancelling _cts) is what eventually ends it.
+            return true;
+        }
+        if (shouldDrop)
+        {
+            // Abruptly close the connection instead of replying — simulates the device
+            // going away mid-restore.
+            client.Close();
+            return false;
         }
 
         if (response is null)
         {
             await writer.WriteAsync("NAK\n\n");
-            return;
+            return true;
         }
         if (_ackFirst)
         {
@@ -259,6 +306,7 @@ public sealed class FakeVideohub : IAsyncDisposable
             await writer.WriteAsync(response);
             await writer.WriteAsync("ACK\n\n");
         }
+        return true;
     }
 
     /// <summary>Validates and applies one block under the caller's lock. Returns the

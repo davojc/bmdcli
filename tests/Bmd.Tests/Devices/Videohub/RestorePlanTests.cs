@@ -69,6 +69,25 @@ public class RestorePlanTests
     }
 
     [Fact]
+    public void Compute_RouteToRenamedInput_UsesSnapshotsNewLabelForTo()
+    {
+        // Finding 4: when a restore both renames input 4 and routes an output to it, the route
+        // line's To must name the input's NEW (snapshot) label, not its current device label —
+        // that is what it will actually be called once the restore finishes applying labels too.
+        var device = State(Fixtures.Dump4x4.Replace("VIDEO OUTPUT ROUTING:\n0 3", "VIDEO OUTPUT ROUTING:\n0 0"));
+        var baseSnapshot = Snapshot();
+        var renamedInputs = baseSnapshot.Inputs
+            .Select(i => i.N == 4 ? i with { Label = "Cam 4 New" } : i).ToArray();
+        var snapshot = baseSnapshot with { Inputs = renamedInputs };
+
+        var changes = RestorePlan.Compute(snapshot, device);
+        var routeChange = Assert.Single(changes, c => c.Kind == RestoreChangeKind.Route);
+        Assert.Equal("Cam 1", routeChange.From);      // device's current label for the currently-routed input
+        Assert.Equal("Cam 4 New", routeChange.To);    // snapshot's NEW label for the target input
+        Assert.Equal("route 1: Cam 1 → Cam 4 New", routeChange.Describe());
+    }
+
+    [Fact]
     public void Compute_IsIdempotent_AfterApplyingEverything()
     {
         // simulate a converged device by computing against the snapshot's own source state

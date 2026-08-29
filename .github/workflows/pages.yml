@@ -1,0 +1,53 @@
+# Publishes the static docs site in site/ to GitHub Pages. There is no build step: the
+# job below uploads site/ exactly as committed. This only runs the upload/deploy actions
+# (no `run:` steps at all), so there is no shell for a hostile ref/path to be injected
+# into — see release.yml for why that distinction matters for workflows with write scopes.
+#
+# NOTE: this workflow deploying successfully still requires the repository's Settings ->
+# Pages -> "Build and deployment" -> Source to be set to "GitHub Actions" (a one-time,
+# manual, repo-owner-only setting). Until that is set, deploy-pages will fail even though
+# this file is correct.
+
+name: Deploy site to Pages
+
+on:
+  push:
+    branches:
+      - main
+    paths:
+      - 'site/**'
+      - '.github/workflows/pages.yml'
+  workflow_dispatch:
+
+# Least privilege: read the repo, write the Pages deployment, and mint the OIDC token
+# deploy-pages needs to authenticate to the Pages API. Nothing else.
+permissions:
+  contents: read
+  pages: write
+  id-token: write
+
+# Only one Pages deployment should ever be in flight; let a queued run finish rather than
+# cancelling it mid-deploy, which could leave the published site in a half-updated state.
+concurrency:
+  group: pages
+  cancel-in-progress: false
+
+jobs:
+  deploy:
+    name: Deploy
+    runs-on: ubuntu-latest
+    environment:
+      name: github-pages
+      url: ${{ steps.deployment.outputs.page_url }}
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/configure-pages@v5
+
+      - uses: actions/upload-pages-artifact@v3
+        with:
+          path: site
+
+      - name: Deploy to GitHub Pages
+        id: deployment
+        uses: actions/deploy-pages@v4

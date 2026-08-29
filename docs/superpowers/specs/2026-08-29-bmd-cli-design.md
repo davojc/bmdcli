@@ -22,6 +22,8 @@ Linux, and macOS.
   stdout/stdin-friendly export/restore.
 - Self-updating: releases built by GitHub Actions on semver tags; `bmd update`
   downloads, verifies, and installs the latest release in place.
+- Discoverable: a GitHub Pages site documents the tool per device and gives
+  users their initial download without hunting through the repo.
 
 ## Non-goals (v1)
 
@@ -317,6 +319,38 @@ Run `bmd update` to upgrade.
 Suppressed when: `update.check = false` in config, stderr is not a TTY,
 `--json` was passed, or the command is `bmd update`/`bmd version` itself.
 
+## Website (GitHub Pages)
+
+Static site at `https://davojc.github.io/bmdcli/`, source in `site/` on
+`main`, deployed by a GitHub Actions workflow (`actions/deploy-pages`) on any
+push to `main` touching `site/`. Hand-written HTML/CSS, no build toolchain.
+`docs/` stays internal (specs) and is not published.
+
+```
+site/
+  index.html        # what bmd is, download section, quick start
+  videohub.html     # per-device guide; future devices get sibling pages
+  style.css
+```
+
+- **index.html:** what the tool is, a terminal-style demo snippet, and a
+  Download section listing all five platforms via GitHub's stable
+  latest-asset URLs
+  (`https://github.com/davojc/bmdcli/releases/latest/download/bmd-<rid>.zip`
+  / `.tar.gz`) — these always serve the newest release, so the page never
+  goes stale on version bumps. A few lines of JS detect the visitor's OS and
+  feature the matching download first (plain list works with JS off). Then a
+  30-second quick start (`bmd config set videohub.host …` →
+  `bmd videohub route list`) and a note that `bmd update` handles upgrades
+  thereafter.
+- **videohub.html:** per-device guidance — connecting/config, every command
+  group with examples (inspect, routing, renames, locks, watch), and the
+  event workflow (export → verify → restore) as a worked example.
+- **Maintenance rule:** the site documents user-facing behavior; any change
+  that adds or alters a command updates the relevant `site/` page in the same
+  change. The site is part of "done".
+- One-time manual repo setting: Pages → Source = "GitHub Actions".
+
 ## Milestones
 
 1. **Skeleton:** project + ConsoleAppFramework wiring + config subsystem
@@ -326,6 +360,8 @@ Suppressed when: `update.check = false` in config, stderr is not a TTY,
 3. **Write path:** `route set`, renames, lock/unlock/force.
 4. **Watch:** pushed-update stream → `watch`.
 5. **Snapshots:** `export` (with verification/retry) + `restore` (diff-apply).
-6. **Release pipeline:** tag-triggered GitHub Actions matrix, all-RID archives,
-   checksums, GitHub Release creation, `bmd version`.
+6. **Release pipeline + site:** tag-triggered GitHub Actions matrix, all-RID
+   archives, checksums, GitHub Release creation, `bmd version`; Pages site
+   (index + videohub guide + deploy workflow) — download links only work once
+   a release exists, so these land together.
 7. **Self-update:** `bmd update [--check]` + passive 24h notice.

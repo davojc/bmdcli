@@ -42,6 +42,12 @@ before architectural changes; update it when a design decision changes.
   from `checksums.txt` before self-replacing; pre-release tags are ignored by
   update checks. Passive update notice: stderr only, after output, ≤1/24h,
   cached in the OS cache dir, off via `update.check = false`.
+- **The Pages site ships with the change.** `site/` (plain HTML/CSS, deployed
+  to https://davojc.github.io/bmdcli/ by Actions on push to main) documents
+  user-facing behavior: any commit that adds or changes a command updates the
+  relevant `site/` page too. Download links use the stable
+  `releases/latest/download/...` URLs — never hardcode a version. `docs/` is
+  internal and never published.
 
 ## Videohub protocol (quick reference)
 

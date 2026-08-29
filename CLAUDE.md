@@ -35,6 +35,13 @@ before architectural changes; update it when a design decision changes.
   server in the test project — never against real hardware in CI.
 - Errors: one clear message to stderr, no stack traces. Exit codes: 0 success,
   1 operation failure, 2 usage error.
+- **Releases are tag-driven.** Pushing a semver tag (`v1.2.0`) triggers the
+  GitHub Actions release matrix (AOT builds on each target OS — never
+  cross-OS). The tag is the only version source: stamped via `-p:Version`,
+  shown by `bmd version`, compared by `bmd update`. Updates verify SHA-256
+  from `checksums.txt` before self-replacing; pre-release tags are ignored by
+  update checks. Passive update notice: stderr only, after output, ≤1/24h,
+  cached in the OS cache dir, off via `update.check = false`.
 
 ## Videohub protocol (quick reference)
 
@@ -57,6 +64,7 @@ dotnet publish src/Bmd -c Release -r win-x64          # AOT binary (also: linux-
 ## Roadmap
 
 Milestones (detail in spec): 1 skeleton+config → 2 read path → 3 write path →
-4 watch → 5 export/restore → 6 CI + all-RID releases. Future devices:
+4 watch → 5 export/restore → 6 tag-driven release pipeline → 7 self-update.
+Future devices:
 HyperDeck (text/TCP), ATEM (binary/UDP) — each gets `Commands/<Device>/` +
 `Devices/<Device>/` mirroring Videohub.

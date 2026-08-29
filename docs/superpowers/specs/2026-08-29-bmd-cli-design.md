@@ -20,6 +20,8 @@ Linux, and macOS.
 - Single-file Native AOT binaries (~5 MB), fast cold start, no runtime install.
 - Scriptable: `--json` output on read commands, meaningful exit codes,
   stdout/stdin-friendly export/restore.
+- Self-updating: releases built by GitHub Actions on semver tags; `bmd update`
+  downloads, verifies, and installs the latest release in place.
 
 ## Non-goals (v1)
 
@@ -55,6 +57,9 @@ bmd config set <key> <value> [--global]
 bmd config get <key>
 bmd config unset <key> [--global]
 bmd config list [--show-origin]
+
+bmd version                                # embedded version + RID, e.g. "1.2.0 (win-x64)"
+bmd update [--check]                       # --check reports only; bare form self-updates
 ```
 
 Common options on every `videohub` command:
@@ -90,7 +95,9 @@ Git-config model: INI files, layered, device-type sections.
   its own device.
 - **Precedence:** command-line flag > local `.bmdconfig` > global config >
   built-in default.
-- Keys are addressed as `section.key` (e.g. `videohub.host`).
+- Keys are addressed as `section.key` (e.g. `videohub.host`). Non-device
+  sections exist too: `update.check = true|false` (default true) controls the
+  passive update notice.
 - `bmd config list --show-origin` prints the file each effective value came from.
 - The INI parser is hand-written (~50 lines), AOT-safe, zero dependencies.
   Subset supported: `[section]` headers, `key = value`, `#`/`;` comments,
@@ -243,9 +250,13 @@ configuration gets a helpful hint (`run: bmd config set videohub.host <addr>`).
   ACKs, pushes updates). The fake doubles as protocol documentation and lets
   export-verify, restore-diff, watch, and mid-export-change scenarios run
   without hardware.
+- **Self-update:** semver comparison and checksum verification are pure
+  functions, unit tested. Download/replace flow tests against a local fake
+  releases HTTP server; the platform-specific swap is exercised on a dummy
+  file, not the running test binary.
 - TDD throughout (test first, then implementation).
 
-## Distribution
+## Distribution & releases
 
 Native AOT, single file, per RID: `win-x64`, `linux-x64`, `linux-arm64`,
 `osx-x64`, `osx-arm64`.
@@ -254,9 +265,57 @@ Native AOT, single file, per RID: `win-x64`, `linux-x64`, `linux-arm64`,
 dotnet publish src/Bmd -c Release -r <rid>
 ```
 
-CI (GitHub Actions) builds all five on tag and attaches binaries to a release.
-CI setup is part of a later milestone, but `PublishAot=true` is set from the
-first commit.
+`PublishAot=true` is set from the first commit so AOT violations surface
+immediately.
+
+**Release pipeline (GitHub Actions):** pushing a semver tag (`v1.2.0`) builds
+a release. The tag is the single source of version truth — stamped into the
+binary (`-p:Version=1.2.0`), reported by `bmd version`, compared by update
+checks. Native AOT must build on the target OS, so a matrix covers all five
+RIDs: `windows-latest` (win-x64), `ubuntu-latest` (linux-x64),
+`ubuntu-24.04-arm` (linux-arm64), `macos-latest` (osx-arm64 and osx-x64).
+Each job uploads `bmd-<rid>.zip` (Windows) or `bmd-<rid>.tar.gz` (Unix); a
+final job writes `checksums.txt` (SHA-256 of every archive) and creates the
+GitHub Release with all assets. Tags with a pre-release suffix
+(`v1.2.0-rc.1`) become GitHub pre-releases, which update checks ignore.
+
+## Self-update
+
+`bmd version` prints the embedded version and RID (both baked in at build
+time — the RID determines which release asset to fetch).
+
+**`bmd update --check`** queries the GitHub Releases API for the latest
+(non-pre-release) release of `davojc/bmdcli` (public repo, no auth), compares
+semver against the embedded version, reports, exits 0.
+
+**`bmd update`** additionally:
+
+1. Downloads the asset matching the embedded RID.
+2. Verifies its SHA-256 against the release's `checksums.txt` **before
+   touching anything**. Bad checksum → abort, exit 1, nothing changed.
+3. Self-replaces:
+   - **Unix:** extract next to the current executable, `chmod +x`, atomic
+     rename over the current path.
+   - **Windows:** a running exe cannot be overwritten but can be renamed —
+     `bmd.exe` → `bmd.exe.old`, new binary moved into place; the `.old` file
+     is silently cleaned up on a later run (the gh/rustup approach).
+   - Any failure restores the original. No write permission on the install
+     dir → clear error telling the user to re-run elevated.
+
+**Passive check (gh-style):** during any normal command, at most once per
+24 hours, a background task fetches the latest version and caches the result
+in the OS cache dir (`~/.cache/bmd` on Unix, `%LOCALAPPDATA%\bmd` on
+Windows — note: cache, distinct from config). It never delays the command;
+network failures are silent. If a newer version exists, a two-line notice
+goes to **stderr after** the command output:
+
+```
+A new release of bmd is available: 1.2.0 → 1.4.1
+Run `bmd update` to upgrade.
+```
+
+Suppressed when: `update.check = false` in config, stderr is not a TTY,
+`--json` was passed, or the command is `bmd update`/`bmd version` itself.
 
 ## Milestones
 
@@ -267,4 +326,6 @@ first commit.
 3. **Write path:** `route set`, renames, lock/unlock/force.
 4. **Watch:** pushed-update stream → `watch`.
 5. **Snapshots:** `export` (with verification/retry) + `restore` (diff-apply).
-6. **Release:** all-RID publishes + CI.
+6. **Release pipeline:** tag-triggered GitHub Actions matrix, all-RID archives,
+   checksums, GitHub Release creation, `bmd version`.
+7. **Self-update:** `bmd update [--check]` + passive 24h notice.

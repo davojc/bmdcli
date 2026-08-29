@@ -7,6 +7,9 @@ public enum LockState { Unlocked, Owned, Locked }
 
 public sealed class VideohubProtocolException(string message) : Exception(message);
 
+/// <summary>Thrown when the device NAKs a block sent by the client.</summary>
+public sealed class VideohubCommandRejectedException(string message) : Exception(message);
+
 /// <summary>Snapshot of a Videohub's state. ALL public numbering is 1-based
 /// (matching front panels); internal storage mirrors the 0-based wire.</summary>
 public sealed class VideohubState
@@ -31,6 +34,15 @@ public sealed class VideohubState
     public string GetOutputLabel(int output) => _outputLabels[CheckIndex(output, Device.VideoOutputs, nameof(output))];
     public int GetRoute(int output) => _routes[CheckIndex(output, Device.VideoOutputs, nameof(output))] + 1;
     public LockState GetLock(int output) => _locks[CheckIndex(output, Device.VideoOutputs, nameof(output))];
+
+    internal VideohubState WithInputLabels(string[] inputLabels) =>
+        new(Device, inputLabels, _outputLabels, _routes, _locks);
+    internal VideohubState WithOutputLabels(string[] outputLabels) =>
+        new(Device, _inputLabels, outputLabels, _routes, _locks);
+    internal VideohubState WithRoutes(int[] routes) =>
+        new(Device, _inputLabels, _outputLabels, routes, _locks);
+    internal VideohubState WithLocks(LockState[] locks) =>
+        new(Device, _inputLabels, _outputLabels, _routes, locks);
 
     static int CheckIndex(int n, int count, string name) =>
         n >= 1 && n <= count ? n - 1 : throw new ArgumentOutOfRangeException(name, n, $"must be between 1 and {count}");

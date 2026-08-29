@@ -28,15 +28,60 @@ public static class DumpParser
         }
         var locks = new LockState[device.VideoOutputs];
         foreach (var (index, value) in ParsePairs(byHeader["VIDEO OUTPUT LOCKS"], device.VideoOutputs))
-            locks[index] = value switch
-            {
-                "U" => LockState.Unlocked,
-                "O" => LockState.Owned,
-                "L" => LockState.Locked,
-                _ => throw new VideohubProtocolException($"unknown lock state '{value}'"),
-            };
+            locks[index] = ParseLock(value);
         return new VideohubState(device, inputLabels, outputLabels, routes, locks);
     }
+
+    /// <summary>Returns a new state with the update block's entries applied.
+    /// Blocks that are not recognised return the state unchanged.</summary>
+    public static VideohubState ApplyUpdate(VideohubState state, ProtocolBlock block)
+    {
+        var device = state.Device;
+        switch (block.Header)
+        {
+            case "INPUT LABELS":
+            {
+                var labels = Enumerable.Range(1, device.VideoInputs).Select(state.GetInputLabel).ToArray();
+                foreach (var (index, value) in ParsePairs(block, device.VideoInputs)) labels[index] = value;
+                return state.WithInputLabels(labels);
+            }
+            case "OUTPUT LABELS":
+            {
+                var labels = Enumerable.Range(1, device.VideoOutputs).Select(state.GetOutputLabel).ToArray();
+                foreach (var (index, value) in ParsePairs(block, device.VideoOutputs)) labels[index] = value;
+                return state.WithOutputLabels(labels);
+            }
+            case "VIDEO OUTPUT ROUTING":
+            {
+                var routes = Enumerable.Range(1, device.VideoOutputs).Select(n => state.GetRoute(n) - 1).ToArray();
+                foreach (var (index, value) in ParsePairs(block, device.VideoOutputs))
+                {
+                    var route = ParseInt(value, block.Header);
+                    if (route < 0 || route >= device.VideoInputs)
+                        throw new VideohubProtocolException(
+                            $"route for output {index + 1} has invalid input {route} (valid range 0-{device.VideoInputs - 1})");
+                    routes[index] = route;
+                }
+                return state.WithRoutes(routes);
+            }
+            case "VIDEO OUTPUT LOCKS":
+            {
+                var locks = Enumerable.Range(1, device.VideoOutputs).Select(state.GetLock).ToArray();
+                foreach (var (index, value) in ParsePairs(block, device.VideoOutputs)) locks[index] = ParseLock(value);
+                return state.WithLocks(locks);
+            }
+            default:
+                return state;
+        }
+    }
+
+    static LockState ParseLock(string value) => value switch
+    {
+        "U" => LockState.Unlocked,
+        "O" => LockState.Owned,
+        "L" => LockState.Locked,
+        _ => throw new VideohubProtocolException($"unknown lock state '{value}'"),
+    };
 
     static VideohubDeviceInfo ParseDevice(ProtocolBlock device, ProtocolBlock? preamble)
     {

@@ -11,6 +11,11 @@ public class VideohubRestoreTests : IDisposable
 {
     static readonly DateTimeOffset Stamp = new(2026, 8, 29, 10, 0, 0, TimeSpan.Zero);
 
+    /// <summary>A fixture dump that diverges from <see cref="SnapshotFile"/>'s snapshot: output 1
+    /// is wired to input 1 instead of the snapshot's input 4 — one route change is needed.</summary>
+    static readonly string DivergentDump =
+        Fixtures.Dump4x4.Replace("VIDEO OUTPUT ROUTING:\n0 3", "VIDEO OUTPUT ROUTING:\n0 0");
+
     readonly string _root = Directory.CreateTempSubdirectory("bmdtest").FullName;
     readonly StringWriter _stdout = new();
     readonly StringWriter _stderr = new();
@@ -353,6 +358,41 @@ public class VideohubRestoreTests : IDisposable
         Assert.Equal(0, await Commands().Restore("-", host: "127.0.0.1", port: fake.Port));
 
         Assert.Contains("nothing to do", _stdout.ToString());
+    }
+
+    [Fact]
+    public async Task Restore_NoOp_WritesNoBackup()
+    {
+        await using var fake = FakeVideohub.Start();
+        var path = SnapshotFile();                       // snapshot of the fake's current state
+        Assert.Equal(0, await Commands().Restore(path, host: "127.0.0.1", port: fake.Port));
+        Assert.False(Directory.Exists(BackupDir), "a restore that changes nothing must not spend a backup");
+    }
+
+    [Fact]
+    public async Task Restore_Incompatible_WritesNoBackup()
+    {
+        await using var fake = FakeVideohub.Start();
+        var path = IncompatibleSnapshotFile();           // 20x20 snapshot vs the 4x4 fake
+        Assert.Equal(2, await Commands().Restore(path, host: "127.0.0.1", port: fake.Port));
+        Assert.False(Directory.Exists(BackupDir));
+    }
+
+    [Fact]
+    public async Task Restore_WithChanges_StillWritesBackupBeforeMutating()
+    {
+        await using var fake = FakeVideohub.Start(DivergentDump);   // needs at least one change
+        var path = SnapshotFile();
+        Assert.Equal(0, await Commands().Restore(path, host: "127.0.0.1", port: fake.Port, json: true));
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        var backup = root.GetProperty("backup").GetString();
+        Assert.False(string.IsNullOrEmpty(backup));
+        Assert.True(File.Exists(backup));
+        // The backup must describe the PRE-change state: the fixture's divergent route (output 1
+        // wired to input 1), not the post-restore route (input 4) the snapshot just applied.
+        var saved = VideohubSnapshot.FromJson(File.ReadAllText(backup!));
+        Assert.Equal(1, saved.Outputs[0].Input);
+        Assert.Equal(4, fake.Routes()[0] + 1);
     }
 
     [Fact]

@@ -249,15 +249,17 @@ public class VideohubCommands
             return Task.FromResult(1);
         }
 
-        // --dry-run skips the backup: nothing on the device is going to change, so there is
-        // nothing to protect against.
-        return WithBackedUpClientAsync(host, port, timeout, noBackup || dryRun, async (client, backup) =>
+        // --dry-run disables the backup thunk outright: nothing on the device is ever going to
+        // change on this run, so there is nothing to protect against.
+        return WithDeferredBackupClientAsync(host, port, timeout, noBackup || dryRun, async (client, ensureBackup) =>
         {
             var problems = snapshot.IncompatibilityWith(client.State.Device);
             if (problems.Count > 0)
             {
                 // A usage/format error, not a device error: the wrong snapshot file was
                 // supplied. Exit 2 (like the other "bad argument" paths), device untouched.
+                // The thunk is never called: an incompatible snapshot can never be applied, so
+                // there is nothing to protect a backup against here either.
                 Console.Error.WriteLine("error: snapshot does not match this device");
                 foreach (var problem in problems) Console.Error.WriteLine($"  {problem}");
                 return 2;
@@ -269,6 +271,14 @@ public class VideohubCommands
             // firmware), so re-querying it partway through applying changes would make the
             // remaining work order- and timing-dependent instead of a plan decided up front.
             var changes = RestorePlan.Compute(snapshot, client.State);
+
+            // The backup is spent only once we know at least one change is actually going to be
+            // applied — a no-op restore (changes.Count == 0) or a dry run must not spend it. The
+            // thunk is called here, before the apply loop's first mutation, so the snapshot it
+            // captures is still the device's pre-change state (see WithDeferredBackupClientAsync).
+            string? backup = null;
+            if (changes.Count > 0 && !dryRun) backup = await ensureBackup();
+
             var applied = 0;
             try
             {
@@ -609,6 +619,44 @@ public class VideohubCommands
     internal Task<int> BackupProbeAsync(
         string host, int port, bool noBackup, Func<VideohubClient, string?, Task<int>> action)
         => WithBackedUpClientAsync(host, port, null, noBackup, action);
+
+    /// <summary>Connects and hands the action a thunk that writes the pre-change backup on demand.
+    /// Call the thunk immediately before the first mutation: a command that turns out to have
+    /// nothing to do — or turns out not to apply at all — must not spend a backup slot.
+    /// The thunk is idempotent (a second call returns the same path without writing again) and
+    /// returns null when backups are disabled. Unlike <see cref="WithBackedUpClientAsync"/>, which
+    /// backs up eagerly because its five callers (route set, renames, lock, unlock) always intend
+    /// to mutate, this seam defers the decision to the caller, who alone knows whether work is
+    /// actually needed.</summary>
+    Task<int> WithDeferredBackupClientAsync(
+        string? host, int? port, int? timeout, bool noBackup,
+        Func<VideohubClient, Func<Task<string?>>, Task<int>> action)
+        => RunWithClientAsync(host, port, timeout, client =>
+        {
+            string? written = null;
+            var done = false;
+            Task<string?> Backup()
+            {
+                if (done) return Task.FromResult(written);
+                done = true;
+                if (!noBackup)
+                {
+                    var store = BackupStore.FromConfig(_loadConfig());
+                    if (store.AutoBackupEnabled)
+                    {
+                        // Captured from client.State at the moment the thunk is first called —
+                        // never mutated except by our own sends, so as long as every caller
+                        // invokes this before its first mutation, this is always the pre-change
+                        // state, regardless of how much later in the call the thunk fires.
+                        var snapshot = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow);
+                        written = store.Write(
+                            BackupStore.DeviceKey(client.Host, client.State.Device.ModelName), snapshot);
+                    }
+                }
+                return Task.FromResult(written);
+            }
+            return action(client, Backup);
+        });
 
     /// <summary>Resolves the connection from flags then config, connects, runs the action,
     /// and maps every expected failure to one stderr line plus an exit code.</summary>

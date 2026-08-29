@@ -60,4 +60,67 @@ public sealed class IniFile
 
     static bool SectionEquals(string a, string b) =>
         a.Equals(b, StringComparison.OrdinalIgnoreCase);
+
+    public string ToText() => _lines.Count == 0 ? "" : string.Join('\n', _lines) + "\n";
+
+    public void Set(string section, string key, string value)
+    {
+        var formatted = $"\t{key} = {FormatValue(value)}";
+        var (sectionStart, sectionEnd) = FindSection(section);
+        if (sectionStart < 0)
+        {
+            _lines.Add($"[{section}]");
+            _lines.Add(formatted);
+            return;
+        }
+        var keyLine = FindKeyLine(sectionStart, sectionEnd, key);
+        if (keyLine >= 0) { _lines[keyLine] = formatted; return; }
+        // insert after the last non-blank line of the section
+        var insertAt = sectionEnd;
+        while (insertAt > sectionStart + 1 && _lines[insertAt - 1].Trim().Length == 0) insertAt--;
+        _lines.Insert(insertAt, formatted);
+    }
+
+    public bool Unset(string section, string key)
+    {
+        var (sectionStart, sectionEnd) = FindSection(section);
+        if (sectionStart < 0) return false;
+        var keyLine = FindKeyLine(sectionStart, sectionEnd, key);
+        if (keyLine < 0) return false;
+        _lines.RemoveAt(keyLine);
+        return true;
+    }
+
+    /// <returns>(header line index, exclusive end index) or (-1, -1)</returns>
+    (int Start, int End) FindSection(string section)
+    {
+        for (var i = 0; i < _lines.Count; i++)
+        {
+            var t = _lines[i].Trim();
+            if (t.Length > 1 && t[0] == '[' && t[^1] == ']' && SectionEquals(t[1..^1].Trim(), section))
+            {
+                var end = i + 1;
+                while (end < _lines.Count && !_lines[end].TrimStart().StartsWith('[')) end++;
+                return (i, end);
+            }
+        }
+        return (-1, -1);
+    }
+
+    int FindKeyLine(int sectionStart, int sectionEnd, string key)
+    {
+        for (var i = sectionStart + 1; i < sectionEnd; i++)
+        {
+            var t = _lines[i].Trim();
+            if (t.Length == 0 || t[0] is '#' or ';') continue;
+            var eq = t.IndexOf('=');
+            if (eq > 0 && t[..eq].Trim().Equals(key, StringComparison.OrdinalIgnoreCase)) return i;
+        }
+        return -1;
+    }
+
+    static string FormatValue(string value) =>
+        value.IndexOfAny(['#', ';']) >= 0 || value != value.Trim()
+            ? $"\"{value}\""
+            : value;
 }

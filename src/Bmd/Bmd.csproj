@@ -18,4 +18,8 @@
     </PackageReference>
   </ItemGroup>
 
+  <ItemGroup>
+    <InternalsVisibleTo Include="Bmd.Tests" />
+  </ItemGroup>
+
 </Project>

@@ -180,9 +180,15 @@ public class VideohubCommands
         _ => "unlocked",
     };
 
-    async Task<int> WithClientAsync(string? host, int? port, int? timeout, Func<VideohubClient, int> action)
-    {
-        try
+    /// <summary>Synchronous-action convenience over <see cref="RunWithClientAsync"/>.</summary>
+    Task<int> WithClientAsync(string? host, int? port, int? timeout, Func<VideohubClient, int> action)
+        => RunWithClientAsync(host, port, timeout, client => Task.FromResult(action(client)));
+
+    /// <summary>Resolves the connection from flags then config, connects, runs the action,
+    /// and maps every expected failure to one stderr line plus an exit code.</summary>
+    Task<int> RunWithClientAsync(
+        string? host, int? port, int? timeout, Func<VideohubClient, Task<int>> action)
+        => RunCatchingAsync(async () =>
         {
             var store = _loadConfig();
             var resolvedHost = host ?? GetConfig(store, "videohub.host");
@@ -200,20 +206,33 @@ public class VideohubCommands
             }
             await using var client = await VideohubClient.ConnectAsync(
                 resolvedHost, resolvedPort, TimeSpan.FromSeconds(resolvedTimeout));
-            return action(client);
+            return await action(client);
+        });
+
+    /// <summary>Runs <paramref name="body"/>, mapping every expected failure to one stderr line
+    /// plus exit code 1. The single filter shared by the real connect+action path and by the
+    /// <see cref="ThrowingProbeAsync"/> test seam.</summary>
+    static async Task<int> RunCatchingAsync(Func<Task<int>> body)
+    {
+        try
+        {
+            return await body();
         }
         catch (Exception ex) when (ex is SocketException or IOException or UnauthorizedAccessException
-                                       or TimeoutException or VideohubProtocolException)
-        {
-            Console.Error.WriteLine($"error: {ex.Message}");
-            return 1;
-        }
-        catch (ConfigValueFormatException ex)
+                                       or TimeoutException or VideohubProtocolException
+                                       or SnapshotFormatException or ConfigValueException
+                                       or ConfigValueFormatException)
         {
             Console.Error.WriteLine($"error: {ex.Message}");
             return 1;
         }
     }
+
+    /// <summary>Test seam: runs the shared failure filter directly against a supplied exception,
+    /// bypassing host resolution and the network connect (unlike <see cref="RunWithClientAsync"/>,
+    /// which must connect before it can invoke the caller's action).</summary>
+    internal Task<int> ThrowingProbeAsync(Exception exception)
+        => RunCatchingAsync(() => throw exception);
 
     static string? GetConfig(ConfigStore store, string key)
     {

@@ -24,6 +24,9 @@ Linux, and macOS.
   downloads, verifies, and installs the latest release in place.
 - Discoverable: a GitHub Pages site documents the tool per device and gives
   users their initial download without hunting through the repo.
+- Zero-friction setup: `bmd discover` finds Blackmagic devices on the local
+  network via mDNS and can write the chosen device straight into config — no
+  hunting for IP addresses.
 
 ## Non-goals (v1)
 
@@ -59,6 +62,10 @@ bmd config set <key> <value> [--global]
 bmd config get <key>
 bmd config unset <key> [--global]
 bmd config list [--show-origin]
+
+bmd discover [--timeout <sec>] [--json]    # list supported devices found via mDNS
+bmd discover --all                         # list every Blackmagic responder
+bmd discover --add [--global]              # discover, pick from list, write config
 
 bmd version                                # embedded version + RID, e.g. "1.2.0 (win-x64)"
 bmd update [--check]                       # --check reports only; bare form self-updates
@@ -140,6 +147,37 @@ Design:
 - 0-based↔1-based conversion lives at this layer's public boundary: the model
   and everything above it are 1-based; the wire code is 0-based.
 
+## Device discovery
+
+Blackmagic devices announce themselves via mDNS/DNS-SD: classic devices
+(ATEM, older HyperDecks, Videohub) advertise `_blackmagic._tcp.local`, newer
+devices `_bmd_blockcfg._tcp.local`. Each responder's TXT record carries a
+`class=` identifier (e.g. `AtemSwitcher`) naming the device kind.
+
+- **Mechanism:** query both service types on UDP multicast 224.0.0.251:5353,
+  collect responses for the timeout window (default 3 s), resolve each
+  responder's PTR → SRV/TXT/A records into model/name, class, IP, port.
+- **Filtering:** a class→device-type mapping table (initially just Videohub)
+  decides what counts as "supported". Default output lists only supported
+  devices; `--all` lists every Blackmagic responder — the tool for verifying
+  discovery works, and for learning real-world `class` strings.
+  **The mapping table is data to be confirmed empirically against real
+  hardware** — public documentation of the class values is thin, so `--all`
+  output during implementation feeds the table.
+- **`--add` flow:** discover, print a numbered list of supported devices,
+  prompt for a selection, write config exactly as
+  `bmd config set videohub.host <ip>` would — local by default, `--global`
+  for the user-level file. If stdin is not a TTY: clear error pointing at
+  `config set`.
+- **Implementation:** minimal hand-rolled mDNS client (~300 lines), per the
+  zero-dependency/AOT rule (available .NET zeroconf libraries are unverified
+  for AOT). DNS packet encode/parse is pure functions over bytes, unit tested
+  against captured packet fixtures — same pattern as the protocol parser.
+  Lives in `Devices/Discovery/`.
+- **Documented limitations:** mDNS does not cross subnets, and some older
+  Videohubs predate mDNS support. Manual `config set` remains the fallback;
+  the site's videohub page says so.
+
 ## Snapshot export / restore
 
 **Format:** JSON via System.Text.Json **source generators** (AOT-safe,
@@ -209,9 +247,11 @@ src/Bmd/                     # single console project (AssemblyName: bmd)
   Program.cs                 # ConsoleAppFramework root; wires command groups
   Commands/
     ConfigCommands.cs
+    DiscoverCommands.cs
     Videohub/                # one thin class per noun: parse → client → format
   Config/                    # layered config: INI parser, resolver, writer
   Devices/
+    Discovery/               # mDNS client, DNS packet codec, class mapping
     Videohub/                # VideohubClient, protocol parser, models, snapshot
   Output/                    # table/JSON formatting helpers
 tests/Bmd.Tests/
@@ -252,6 +292,9 @@ configuration gets a helpful hint (`run: bmd config set videohub.host <addr>`).
   ACKs, pushes updates). The fake doubles as protocol documentation and lets
   export-verify, restore-diff, watch, and mid-export-change scenarios run
   without hardware.
+- **Discovery:** DNS packet encode/parse unit tested against captured mDNS
+  packet fixtures; the collect/filter/add flow tested with a fake responder
+  on loopback.
 - **Self-update:** semver comparison and checksum verification are pure
   functions, unit tested. Download/replace flow tests against a local fake
   releases HTTP server; the platform-specific swap is exercised on a dummy
@@ -360,8 +403,10 @@ site/
 3. **Write path:** `route set`, renames, lock/unlock/force.
 4. **Watch:** pushed-update stream → `watch`.
 5. **Snapshots:** `export` (with verification/retry) + `restore` (diff-apply).
-6. **Release pipeline + site:** tag-triggered GitHub Actions matrix, all-RID
+6. **Discovery:** mDNS client + `bmd discover [--all|--add]` — rounds out the
+   local workflow before release plumbing.
+7. **Release pipeline + site:** tag-triggered GitHub Actions matrix, all-RID
    archives, checksums, GitHub Release creation, `bmd version`; Pages site
    (index + videohub guide + deploy workflow) — download links only work once
    a release exists, so these land together.
-7. **Self-update:** `bmd update [--check]` + passive 24h notice.
+8. **Self-update:** `bmd update [--check]` + passive 24h notice.

@@ -70,7 +70,7 @@ dotnet publish src/Bmd -c Release -r win-x64          # AOT binary (also: linux-
 ## Roadmap
 
 Milestones (detail in spec): 1 skeleton+config → 2 read path → 3 write path →
-4 watch → 5 export/restore → 6 tag-driven release pipeline → 7 self-update.
-Future devices:
+4 watch → 5 export/restore → 6 mDNS discovery → 7 tag-driven release pipeline
++ Pages site → 8 self-update. Future devices:
 HyperDeck (text/TCP), ATEM (binary/UDP) — each gets `Commands/<Device>/` +
 `Devices/<Device>/` mirroring Videohub.

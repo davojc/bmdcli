@@ -1,4 +1,6 @@
+using System.Text.Json;
 using Bmd.Config;
+using Bmd.Output;
 using ConsoleAppFramework;
 
 namespace Bmd.Commands;
@@ -15,20 +17,24 @@ public class ConfigCommands
     /// <param name="key">Configuration key, e.g. videohub.host.</param>
     /// <param name="value">Value to assign.</param>
     /// <param name="global">-g, Write to the global config file instead of local .bmdconfig.</param>
-    public int Set([Argument] string key, [Argument] string value, bool global = false)
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public int Set([Argument] string key, [Argument] string value, bool global = false, bool json = false)
     {
         if (!TryKey(key, out var k)) return 2;
         if (!TryValue(value)) return 2;
         return RunGuarded(() =>
         {
-            _load().Set(k, value, global);
+            var file = _load().Set(k, value, global);
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(new ConfigSetResult(k.ToString(), value, file), BmdJsonContext.Default.ConfigSetResult));
             return 0;
         });
     }
 
     /// <summary>Print the effective value of a configuration key.</summary>
     /// <param name="key">Configuration key, e.g. videohub.host.</param>
-    public int Get([Argument] string key)
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public int Get([Argument] string key, bool json = false)
     {
         if (!TryKey(key, out var k)) return 2;
         return RunGuarded(() =>
@@ -39,7 +45,15 @@ public class ConfigCommands
                 Console.Error.WriteLine($"error: '{k}' is not set");
                 return 1;
             }
-            Console.WriteLine(value);
+            if (json)
+            {
+                var origin = _load().ListEffective().FirstOrDefault(e => e.Key == k.ToString())?.Origin;
+                Console.WriteLine(JsonSerializer.Serialize(new ConfigGetResult(k.ToString(), value, origin), BmdJsonContext.Default.ConfigGetResult));
+            }
+            else
+            {
+                Console.WriteLine(value);
+            }
             return 0;
         });
     }
@@ -47,7 +61,8 @@ public class ConfigCommands
     /// <summary>Remove a configuration key.</summary>
     /// <param name="key">Configuration key, e.g. videohub.host.</param>
     /// <param name="global">-g, Remove from the global config file instead of local .bmdconfig.</param>
-    public int Unset([Argument] string key, bool global = false)
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public int Unset([Argument] string key, bool global = false, bool json = false)
     {
         if (!TryKey(key, out var k)) return 2;
         return RunGuarded(() =>
@@ -57,16 +72,24 @@ public class ConfigCommands
                 Console.Error.WriteLine($"error: '{k}' is not set in the {(global ? "global" : "local")} config");
                 return 1;
             }
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(new ConfigUnsetResult(k.ToString(), true), BmdJsonContext.Default.ConfigUnsetResult));
             return 0;
         });
     }
 
     /// <summary>List all effective configuration values.</summary>
     /// <param name="showOrigin">Prefix each value with the file it came from.</param>
-    public int List(bool showOrigin = false)
+    /// <param name="json">Emit the result as a JSON array on stdout.</param>
+    public int List(bool showOrigin = false, bool json = false)
     {
         return RunGuarded(() =>
         {
+            if (json)
+            {
+                Console.WriteLine(JsonSerializer.Serialize(_load().ListEffective().ToArray(), BmdJsonContext.Default.ConfigEntryArray));
+                return 0;
+            }
             foreach (var entry in _load().ListEffective())
                 Console.WriteLine(showOrigin ? $"{entry.Origin}\t{entry.Key}={entry.Value}" : $"{entry.Key}={entry.Value}");
             return 0;

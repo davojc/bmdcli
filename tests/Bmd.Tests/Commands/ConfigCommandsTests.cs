@@ -1,8 +1,10 @@
 using Bmd.Commands;
 using Bmd.Config;
+using Bmd.Tests;
 
 namespace Bmd.Tests.Commands;
 
+[Collection("console")]
 public class ConfigCommandsTests : IDisposable
 {
     readonly string _root = Directory.CreateTempSubdirectory("bmdtest").FullName;

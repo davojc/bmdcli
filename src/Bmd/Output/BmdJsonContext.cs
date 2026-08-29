@@ -1,0 +1,13 @@
+using System.Text.Json.Serialization;
+using Bmd.Commands;
+using Bmd.Config;
+
+namespace Bmd.Output;
+
+/// <summary>Single source-generated JSON context for all --json output (AOT-safe).</summary>
+[JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(ConfigGetResult))]
+[JsonSerializable(typeof(ConfigSetResult))]
+[JsonSerializable(typeof(ConfigUnsetResult))]
+[JsonSerializable(typeof(ConfigEntry[]))]
+public partial class BmdJsonContext : JsonSerializerContext;

@@ -1,5 +1,5 @@
 # Builds bmd for all five supported platforms and publishes a GitHub Release whenever a
-# `v*` tag is pushed. Native AOT cannot cross-compile, so there is one build job per
+# `v[0-9]*` tag is pushed. Native AOT cannot cross-compile, so there is one build job per
 # OS/architecture below — do not "optimise" this onto a single runner.
 #
 # SECURITY: the tag name (github.ref_name) is attacker-controlled input from whoever can
@@ -24,7 +24,10 @@ name: Release
 on:
   push:
     tags:
-      - 'v*'
+      # Restricted to numeric-looking versions so a stray tag like `very-important-notes` (which
+      # `v*` would also match) or a bare `v` doesn't slip past the version whitelist and trigger
+      # a build that either produces a garbage version or fails outright.
+      - 'v[0-9]*'
 
 # Least privilege by default: only the release job (which creates the GitHub Release)
 # gets contents: write, and only for itself.

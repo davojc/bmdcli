@@ -93,10 +93,39 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
     </ul>
     <p class="verify">
       Each release also publishes
-      <a href="https://github.com/davojc/bmdcli/releases/latest/download/checksums.txt">checksums.txt</a>.
-      Verify what you downloaded before running it:
-      <code>sha256sum -c checksums.txt</code> on Linux, or
-      <code>shasum -a 256 -c checksums.txt</code> on macOS.
+      <a href="https://github.com/davojc/bmdcli/releases/latest/download/checksums.txt">checksums.txt</a>,
+      listing the SHA-256 checksum of every archive in the release — not just the one you
+      downloaded. Save it alongside your download, then verify with <code>--ignore-missing</code>
+      so the check doesn't complain about the four archives you don't have:
+    </p>
+    <pre class="cmd"><code># Linux
+sha256sum --ignore-missing -c checksums.txt
+
+# macOS
+shasum -a 256 --ignore-missing -c checksums.txt</code></pre>
+    <p class="verify">A good download reports exactly one line, ending in <code>OK</code>:</p>
+    <pre class="cmd cmd-out"><code>bmd-linux-x64.tar.gz: OK</code></pre>
+    <p class="verify">
+      Windows has no equivalent of <code>-c</code> — print the hash instead and compare it by eye
+      against the matching line in <code>checksums.txt</code>:
+    </p>
+    <pre class="cmd"><code>Get-FileHash bmd-win-x64.zip -Algorithm SHA256</code></pre>
+    <p class="verify">
+      The <code>Hash</code> it prints should match (case doesn't matter) the checksum listed next
+      to <code>bmd-win-x64.zip</code>.
+    </p>
+    <p class="verify">
+      <strong>macOS:</strong> these binaries aren't notarized by Apple, so Gatekeeper blocks the
+      first run with <code>"bmd" cannot be opened because the developer cannot be verified</code>.
+      That's expected, not a bad download — and the usual right-click&nbsp;&rarr;&nbsp;Open
+      workaround doesn't apply to command-line binaries. After extracting, clear the quarantine
+      attribute once:
+    </p>
+    <pre class="cmd"><code>xattr -d com.apple.quarantine bmd</code></pre>
+    <p class="verify">
+      Extracting with <code>tar xzf bmd-osx-arm64.tar.gz</code> in Terminal, rather than
+      double-clicking the archive in Finder, avoids the quarantine flag being set in the first
+      place.
     </p>
   </section>
 

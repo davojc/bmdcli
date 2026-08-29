@@ -33,6 +33,9 @@ app.Add("videohub output unlock", videohub.OutputUnlock);
 var discover = new DiscoverCommands();
 app.Add("discover", discover.Discover);
 
+var version = new VersionCommands();
+app.Add("version", version.Version);
+
 if (GroupHelp.TryWrite(args, Console.Out)) return 0;
 
 app.Run(args);

@@ -7,6 +7,7 @@ namespace Bmd.Output;
 
 /// <summary>Single source-generated JSON context for all --json output (AOT-safe).</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(DiscoveredDeviceResult[]))]
 [JsonSerializable(typeof(ConfigGetResult))]
 [JsonSerializable(typeof(ConfigSetResult))]
 [JsonSerializable(typeof(ConfigUnsetResult))]

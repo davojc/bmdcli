@@ -99,6 +99,26 @@ public class BackupStoreTests : IDisposable
     }
 
     [Fact]
+    public void Write_SucceedsEvenWhenPruneCannotDeleteReadOnlyFile()
+    {
+        SetConfig("backup.keep", "1");
+        SetConfig("backup.dir", BackupDir);
+        var store = BackupStore.FromConfig(Config());
+
+        var first = store.Write("hub-a", Snapshot(new DateTimeOffset(2026, 8, 29, 10, 0, 0, TimeSpan.Zero)));
+        File.SetAttributes(first, FileAttributes.ReadOnly);
+        try
+        {
+            var second = store.Write("hub-a", Snapshot(new DateTimeOffset(2026, 8, 29, 10, 1, 0, TimeSpan.Zero)));
+            Assert.True(File.Exists(second));
+        }
+        finally
+        {
+            File.SetAttributes(first, FileAttributes.Normal);
+        }
+    }
+
+    [Fact]
     public void List_NewestFirst_EmptyWhenNone()
     {
         var store = Store();

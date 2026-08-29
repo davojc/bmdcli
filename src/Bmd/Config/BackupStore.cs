@@ -63,7 +63,9 @@ public sealed class BackupStore
         File.WriteAllText(path, snapshot.ToJson());
 
         var verification = VideohubSnapshot.FromJson(File.ReadAllText(path));
-        if (verification.Outputs.Length != snapshot.Outputs.Length
+        if (verification.Device != snapshot.Device
+            || verification.ExportedAt != snapshot.ExportedAt
+            || verification.Outputs.Length != snapshot.Outputs.Length
             || verification.Inputs.Length != snapshot.Inputs.Length
             || verification.Outputs.Where((o, i) => o != snapshot.Outputs[i]).Any()
             || verification.Inputs.Where((input, i) => input != snapshot.Inputs[i]).Any())
@@ -90,7 +92,8 @@ public sealed class BackupStore
         foreach (var path in List(deviceKey).Skip(Keep))
         {
             try { File.Delete(path); }
-            catch (IOException) { /* a locked old backup is not worth failing the mutation over */ }
+            catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+            { /* a locked or read-only old backup is not worth failing the mutation over */ }
         }
     }
 

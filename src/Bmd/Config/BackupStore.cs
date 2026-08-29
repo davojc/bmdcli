@@ -1,4 +1,5 @@
 using System.Text;
+using System.Text.RegularExpressions;
 using Bmd.Devices.Videohub;
 
 namespace Bmd.Config;
@@ -62,7 +63,15 @@ public sealed class BackupStore
         var path = UniquePath(directory, snapshot.ExportedAt);
         File.WriteAllText(path, snapshot.ToJson());
 
-        var verification = VideohubSnapshot.FromJson(File.ReadAllText(path));
+        VideohubSnapshot verification;
+        try
+        {
+            verification = VideohubSnapshot.FromJson(File.ReadAllText(path));
+        }
+        catch (SnapshotFormatException ex)
+        {
+            throw new IOException($"backup written to {path} did not read back intact: {ex.Message}", ex);
+        }
         if (verification.Device != snapshot.Device
             || verification.ExportedAt != snapshot.ExportedAt
             || verification.Outputs.Length != snapshot.Outputs.Length
@@ -82,9 +91,27 @@ public sealed class BackupStore
     {
         var directory = Path.Combine(RootDirectory, deviceKey);
         if (!Directory.Exists(directory)) return [];
+        // Sort by parsed (stamp, suffix) rather than the raw filename: '-' (0x2D) sorts
+        // before '.' (0x2E) ordinally, so a naive filename sort would put "<stamp>-2.json"
+        // before "<stamp>.json" even though the bare name was written first (suffix 1).
+        // Files that don't match the expected shape sort last instead of throwing.
         return Directory.GetFiles(directory, "*.json")
-            .OrderByDescending(path => path, StringComparer.Ordinal)
+            .Select(path => (Path: path, Key: NameKey(path)))
+            .OrderByDescending(entry => entry.Key.Matched)
+            .ThenByDescending(entry => entry.Key.Stamp, StringComparer.Ordinal)
+            .ThenByDescending(entry => entry.Key.Suffix)
+            .Select(entry => entry.Path)
             .ToArray();
+    }
+
+    static readonly Regex NamePattern = new(@"^(\d{8}-\d{6})(?:-(\d+))?\.json$", RegexOptions.Compiled);
+
+    static (bool Matched, string Stamp, int Suffix) NameKey(string path)
+    {
+        var match = NamePattern.Match(Path.GetFileName(path));
+        if (!match.Success) return (false, "", 0);
+        var suffix = match.Groups[2].Success ? int.Parse(match.Groups[2].Value) : 1;
+        return (true, match.Groups[1].Value, suffix);
     }
 
     void Prune(string deviceKey)

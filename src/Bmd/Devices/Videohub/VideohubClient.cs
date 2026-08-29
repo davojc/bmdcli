@@ -10,11 +10,15 @@ public sealed class VideohubClient : IAsyncDisposable
     readonly TcpClient _tcp;
 
     public VideohubState State { get; }
+    public string Host { get; }
+    public int Port { get; }
 
-    VideohubClient(TcpClient tcp, VideohubState state)
+    VideohubClient(TcpClient tcp, VideohubState state, string host, int port)
     {
         _tcp = tcp;
         State = state;
+        Host = host;
+        Port = port;
     }
 
     public static async Task<VideohubClient> ConnectAsync(
@@ -27,7 +31,7 @@ public sealed class VideohubClient : IAsyncDisposable
         {
             await tcp.ConnectAsync(host, port, cts.Token);
             var state = await ReadDumpAsync(tcp, cts.Token);
-            return new VideohubClient(tcp, state);
+            return new VideohubClient(tcp, state, host, port);
         }
         catch (OperationCanceledException) when (!cancellationToken.IsCancellationRequested)
         {

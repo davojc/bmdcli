@@ -166,7 +166,7 @@ public class VideohubCommands
             foreach (var difference in differences) Console.Error.WriteLine($"  {difference}");
             return 1;
         }
-        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SnapshotFormatException)
         {
             Console.Error.WriteLine($"error: {ex.Message}");
             return 1;

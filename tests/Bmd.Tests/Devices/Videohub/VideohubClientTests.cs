@@ -16,6 +16,8 @@ public class VideohubClientTests
         Assert.Equal("Blackmagic Smart Videohub", client.State.Device.ModelName);
         Assert.Equal(4, client.State.GetRoute(1));
         Assert.Equal("Program", client.State.GetOutputLabel(1));
+        Assert.Equal("127.0.0.1", client.Host);
+        Assert.Equal(fake.Port, client.Port);
     }
 
     [Fact]

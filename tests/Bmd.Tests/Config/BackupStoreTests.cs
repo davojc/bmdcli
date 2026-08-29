@@ -131,6 +131,39 @@ public class BackupStoreTests : IDisposable
     }
 
     [Fact]
+    public void List_SameSecondBurst_OrdersNewestFirstPastSuffixNine()
+    {
+        SetConfig("backup.keep", "20");
+        var store = Store();
+        var stamp = new DateTimeOffset(2026, 8, 29, 10, 0, 0, TimeSpan.Zero);
+        for (var i = 0; i < 11; i++) store.Write("hub-a", Snapshot(stamp));
+
+        var listed = store.List("hub-a");
+        Assert.Equal(11, listed.Count);
+        // bare name is the first (oldest) write of the burst; -11 is the last (newest).
+        Assert.EndsWith("20260829-100000-11.json", listed[0]);
+        Assert.EndsWith("20260829-100000.json", listed[^1]);
+    }
+
+    [Fact]
+    public void Prune_SameSecondBurst_KeepsNewestNotOldest()
+    {
+        SetConfig("backup.keep", "2");
+        SetConfig("backup.dir", BackupDir);
+        var store = BackupStore.FromConfig(Config());
+        var stamp = new DateTimeOffset(2026, 8, 29, 10, 0, 0, TimeSpan.Zero);
+        store.Write("hub-a", Snapshot(stamp));
+        store.Write("hub-a", Snapshot(stamp));
+        store.Write("hub-a", Snapshot(stamp));
+
+        var remaining = store.List("hub-a").Select(Path.GetFileName).ToArray();
+        Assert.Equal(2, remaining.Length);
+        Assert.Contains("20260829-100000-3.json", remaining);
+        Assert.Contains("20260829-100000-2.json", remaining);
+        Assert.DoesNotContain("20260829-100000.json", remaining);
+    }
+
+    [Fact]
     public void Write_SeparateDevices_DoNotShareDirectories()
     {
         var store = Store();

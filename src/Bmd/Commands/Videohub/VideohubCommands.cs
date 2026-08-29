@@ -300,8 +300,7 @@ public class VideohubCommands
             return 0;
         });
 
-    /// <summary>Take the lock on an output (1-based), preventing other controllers from
-    /// routing it or taking it over without --force.</summary>
+    /// <summary>Take the lock on an output (1-based), preventing other controllers from routing it or taking it over without --force.</summary>
     /// <param name="output">Output to lock (1-based).</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
@@ -338,8 +337,7 @@ public class VideohubCommands
             return 0;
         });
 
-    /// <summary>Release the lock on an output (1-based). Without --force, unlocking an
-    /// output locked by another controller is left to the device to accept or refuse.</summary>
+    /// <summary>Release the lock on an output (1-based). Without --force, unlocking an output locked by another controller is left to the device to accept or refuse.</summary>
     /// <param name="output">Output to unlock (1-based).</param>
     /// <param name="force">Clear a lock held by another controller.</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>

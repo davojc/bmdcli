@@ -162,6 +162,9 @@ public class VideohubRestoreTests : IDisposable
         Assert.Equal(1, details.GetArrayLength());
         Assert.Equal("route", details[0].GetProperty("kind").GetString());
         Assert.Equal(1, details[0].GetProperty("n").GetInt32());
+        // The JSON report must reflect what actually reached the device, not just what the
+        // command believes it sent — assert the mutation landed server-side too.
+        Assert.Equal(3, fake.Routes()[0]);
     }
 
     [Fact]
@@ -171,6 +174,7 @@ public class VideohubRestoreTests : IDisposable
         var file = IncompatibleSnapshotFile();
         var routesBefore = fake.Routes();
         var inputLabelsBefore = fake.InputLabels();
+        var outputLabelsBefore = fake.OutputLabels();
 
         Assert.Equal(2, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port));
 
@@ -178,6 +182,7 @@ public class VideohubRestoreTests : IDisposable
         Assert.Equal("", _stdout.ToString());
         Assert.Equal(routesBefore, fake.Routes());
         Assert.Equal(inputLabelsBefore, fake.InputLabels());
+        Assert.Equal(outputLabelsBefore, fake.OutputLabels());
     }
 
     [Fact]
@@ -236,5 +241,38 @@ public class VideohubRestoreTests : IDisposable
 
         Assert.Equal(0, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port));
         Assert.Contains("nothing to do", _stdout.ToString());
+    }
+
+    [Fact]
+    public async Task Restore_ResumesAfterPartialFailure_ProgressAccumulatesRatherThanRepeats()
+    {
+        // Three changes required: an input label, an output label, and a route — computed in
+        // that order by RestorePlan (labels before routes, ascending N within each kind).
+        var dump = Fixtures.Dump4x4
+            .Replace("0 Cam 1", "0 Camera One")
+            .Replace("3 Aux", "3 Auxiliary")
+            .Replace("VIDEO OUTPUT ROUTING:\n0 3", "VIDEO OUTPUT ROUTING:\n0 0");
+        await using var fake = FakeVideohub.StartFailingAfter(1, dump);
+        var file = SnapshotFile();
+
+        // Run 1: the connection's allowance covers only the first computed change (the input
+        // label rename). The second attempted change (the output label rename) is NAKed, which
+        // is fatal to the loop, so the route change is never even attempted.
+        Assert.Equal(1, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port));
+        Assert.Contains("applied 1 of 3", _stderr.ToString());
+        Assert.Equal("Cam 1", fake.InputLabels()[0]);       // landed
+        Assert.Equal("Auxiliary", fake.OutputLabels()[3]);  // not yet — still wrong
+        Assert.Equal(0, fake.Routes()[0]);                  // not yet — still wrong (wire 0 = input 1)
+
+        _stdout.GetStringBuilder().Clear();
+        _stderr.GetStringBuilder().Clear();
+
+        // Run 2: a NEW connection to the SAME fake gets a fresh per-connection allowance.
+        // RestorePlan recomputes against the now-partially-restored device, so only the two
+        // REMAINING changes are considered — the already-fixed input label is not resent.
+        Assert.Equal(1, await Commands().Restore(file, host: "127.0.0.1", port: fake.Port));
+        Assert.Contains("applied 1 of 2", _stderr.ToString());
+        Assert.Equal("Aux", fake.OutputLabels()[3]);        // landed this run
+        Assert.Equal(0, fake.Routes()[0]);                  // still the last remaining change
     }
 }

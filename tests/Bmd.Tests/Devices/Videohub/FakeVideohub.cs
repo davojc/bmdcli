@@ -17,6 +17,7 @@ public sealed class FakeVideohub : IAsyncDisposable
     readonly Func<string>? _dumpFactory;      // set only by StartChanging
     readonly bool _rejectEverything;
     readonly bool _ackFirst;
+    readonly int? _failAfter;                 // set only by StartFailingAfter
 
     // mutable server state (0-based, wire order)
     string _rawDump = "";
@@ -31,11 +32,12 @@ public sealed class FakeVideohub : IAsyncDisposable
 
     public int Port { get; }
 
-    FakeVideohub(string dump, Func<string>? dumpFactory, bool rejectEverything, bool ackFirst = false)
+    FakeVideohub(string dump, Func<string>? dumpFactory, bool rejectEverything, bool ackFirst = false, int? failAfter = null)
     {
         _dumpFactory = dumpFactory;
         _rejectEverything = rejectEverything;
         _ackFirst = ackFirst;
+        _failAfter = failAfter;
         LoadState(dump);
         _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
@@ -45,6 +47,13 @@ public sealed class FakeVideohub : IAsyncDisposable
 
     public static FakeVideohub Start(string dump = Fixtures.Dump4x4) => new(dump, null, false);
     public static FakeVideohub StartRejecting(string dump = Fixtures.Dump4x4) => new(dump, null, true);
+
+    /// <summary>A hub that ACKs the first <paramref name="successfulMutations"/> mutation blocks
+    /// on EACH connection, then NAKs every one after — the allowance resets on reconnect, the
+    /// way a real device's per-session behavior would. Used to prove a restore interrupted
+    /// partway through resumes (rather than repeats or re-diverges) on the next connection.</summary>
+    public static FakeVideohub StartFailingAfter(int successfulMutations, string dump = Fixtures.Dump4x4) =>
+        new(dump, null, false, failAfter: successfulMutations);
 
     /// <summary>A hub that ACKs a mutation BEFORE broadcasting the changed block, the reverse
     /// of the default order — used to prove command reporting does not depend on echo timing.</summary>
@@ -211,10 +220,13 @@ public sealed class FakeVideohub : IAsyncDisposable
                 using var reader = new StreamReader(stream, Encoding.UTF8);
                 var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
                 var accumulator = new BlockAccumulator();
+                // Per-connection allowance for StartFailingAfter — a single-element array so it
+                // can be mutated from ApplyBlock (an async method, which can't take a ref parameter).
+                var successfulMutations = new int[1];
                 while (await reader.ReadLineAsync(_cts.Token) is { } line)
                 {
                     if (accumulator.Add(line) is not { } block) continue;
-                    await ApplyBlock(block, writer);
+                    await ApplyBlock(block, writer, successfulMutations);
                 }
             }
             catch (OperationCanceledException) { }
@@ -222,12 +234,14 @@ public sealed class FakeVideohub : IAsyncDisposable
         }
     }
 
-    async Task ApplyBlock(ProtocolBlock block, StreamWriter writer)
+    async Task ApplyBlock(ProtocolBlock block, StreamWriter writer, int[] successfulMutations)
     {
         string? response;
         lock (_gate)
         {
-            response = _rejectEverything ? null : TryApply(block);
+            var overAllowance = _failAfter is int limit && successfulMutations[0] >= limit;
+            response = _rejectEverything || overAllowance ? null : TryApply(block);
+            if (response is not null) successfulMutations[0]++;
         }
 
         if (response is null)

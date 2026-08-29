@@ -50,6 +50,12 @@ before architectural changes; update it when a design decision changes.
   from `checksums.txt` before self-replacing; pre-release tags are ignored by
   update checks. Passive update notice: stderr only, after output, ≤1/24h,
   cached in the OS cache dir, off via `update.check = false`.
+- **Mutations back up first.** Every device-changing command snapshots the
+  pre-change state (from the dump already read at connect — no extra round
+  trip) before acting; a failed backup aborts the mutation with exit 1.
+  Backups live in the OS state dir (distinct from config and cache), rotate
+  per `backup.keep`, honor `backup.auto`/`backup.dir`, and every mutation
+  reports its backup path in both human and `--json` output.
 - **The Pages site ships with the change.** `site/` (plain HTML/CSS, deployed
   to https://davojc.github.io/bmdcli/ by Actions on push to main) documents
   user-facing behavior: any commit that adds or changes a command updates the
@@ -77,8 +83,9 @@ dotnet publish src/Bmd -c Release -r win-x64          # AOT binary (also: linux-
 
 ## Roadmap
 
-Milestones (detail in spec): 1 skeleton+config → 2 read path → 3 write path →
-4 watch → 5 export/restore → 6 mDNS discovery → 7 tag-driven release pipeline
-+ Pages site → 8 self-update. Future devices:
+Milestones (detail in spec): 1 skeleton+config ✅ → 2 read path + agent JSON ✅
+→ 3 export + backup store → 4 write path (with auto-backup) → 5 restore →
+6 watch → 7 mDNS discovery → 8 tag-driven release pipeline + Pages site →
+9 self-update. Future devices:
 HyperDeck (text/TCP), ATEM (binary/UDP) — each gets `Commands/<Device>/` +
 `Devices/<Device>/` mirroring Videohub.

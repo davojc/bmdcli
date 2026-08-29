@@ -59,6 +59,7 @@ bmd videohub route set <output> <input>
 bmd videohub watch                         # live stream of route/label/lock changes
 bmd videohub export [file]                 # snapshot; no file → stdout
 bmd videohub restore <file>                # apply snapshot; '-' → stdin
+                                           # mutating commands take --no-backup
 
 bmd config set <key> <value> [--global]
 bmd config get <key>
@@ -261,6 +262,33 @@ bmd videohub export normal.json     # before the event
 bmd videohub restore normal.json    # back to house config
 ```
 
+## Automatic backup before mutations
+
+Every mutating command (`route set`, renames, lock/unlock, and `restore`
+itself) writes a snapshot of the device's pre-change state first. This is
+close to free: `VideohubClient.ConnectAsync` already reads the complete state
+dump before any command runs, so a backup costs one local file write and zero
+extra network round-trips.
+
+- **Location:** `%LOCALAPPDATA%\bmd\backups\<device>\<timestamp>.json` on
+  Windows; `$XDG_STATE_HOME/bmd/backups/...` (else `~/.local/state/bmd/...`)
+  elsewhere. `<device>` is a filesystem-safe key derived from host and model,
+  so multiple hubs never share a directory. Distinct from the config dir
+  (settings) and the cache dir (update checks).
+- **Written from the dump already in memory**, then verified by reading the
+  file back and comparing to that in-memory state. It does **not** re-query
+  the device — the explicit `bmd videohub export` keeps the full fresh-dump
+  verification with retries, because that is the snapshot users rely on.
+- **A failed backup aborts the mutation** (clear error, exit 1, device
+  untouched). Mutating after a failed backup would defeat the purpose.
+  `--no-backup` is the escape hatch for scripted bulk changes where one
+  snapshot was taken up front.
+- **Every mutation reports its backup path** — in human output and in the
+  `--json` result object — so a script or agent that just changed something
+  holds the exact file that undoes it.
+- **Config:** `backup.auto` (default `true`), `backup.keep` (default `10`;
+  oldest pruned per device), `backup.dir` (override the location).
+
 ## Technology choices
 
 | Concern | Choice | Why |
@@ -438,13 +466,22 @@ site/
    contract landed after milestone 1 shipped), then protocol parser +
    `VideohubClient` connect/dump + fake server + `info` / `input list` /
    `output list` / `route list` (+ `--json`).
-3. **Write path:** `route set`, renames, lock/unlock/force.
-4. **Watch:** pushed-update stream → `watch`.
-5. **Snapshots:** `export` (with verification/retry) + `restore` (diff-apply).
-6. **Discovery:** mDNS client + `bmd discover [--all|--add]` — rounds out the
+3. **Export + backup store:** snapshot format, `bmd videohub export` with
+   verification/retry, and the backup directory + rotation the write path
+   will use. Read-only; deliberately ahead of mutations so no mutation ever
+   ships without its safety net.
+4. **Write path:** `route set`, renames, lock/unlock/force — with automatic
+   pre-mutation backup wired in from the first mutating command, never bolted
+   on later. Also restructures command registration so group help
+   (`bmd videohub --help`) lists only that group.
+5. **Restore:** `bmd videohub restore` (diff-apply, device validation,
+   idempotent). Needs the write path from milestone 4, which is why it is
+   split from export.
+6. **Watch:** pushed-update stream → `watch`.
+7. **Discovery:** mDNS client + `bmd discover [--all|--add]` — rounds out the
    local workflow before release plumbing.
-7. **Release pipeline + site:** tag-triggered GitHub Actions matrix, all-RID
+8. **Release pipeline + site:** tag-triggered GitHub Actions matrix, all-RID
    archives, checksums, GitHub Release creation, `bmd version`; Pages site
    (index + videohub guide + deploy workflow) — download links only work once
    a release exists, so these land together.
-8. **Self-update:** `bmd update [--check]` + passive 24h notice.
+9. **Self-update:** `bmd update [--check]` + passive 24h notice.

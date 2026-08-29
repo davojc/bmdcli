@@ -1,4 +1,5 @@
 using System.Net.Sockets;
+using System.Runtime.CompilerServices;
 using System.Text;
 
 namespace Bmd.Devices.Videohub;
@@ -109,6 +110,41 @@ public sealed class VideohubClient : IAsyncDisposable
 
     /// <summary>Folds a pushed update block into the current state. Unknown blocks are ignored.</summary>
     internal void ApplyUpdate(ProtocolBlock block) => _state = DumpParser.ApplyUpdate(_state, block);
+
+    /// <summary>Streams changes as the device reports them, updating <see cref="State"/> as it goes.
+    /// Waits indefinitely between updates — the client's own timeout does not apply here, since a
+    /// watch may legitimately sit idle for hours. Cancelling <paramref name="cancellationToken"/>
+    /// ends the sequence cleanly (no exception out of the enumerator); a closed connection ends it
+    /// by throwing <see cref="VideohubProtocolException"/> (the caller decides what that means).
+    /// Not safe to call while a mutation is in flight on the same client: both consume the
+    /// connection's single reader.</summary>
+    public async IAsyncEnumerable<VideohubUpdate> WatchAsync(
+        [EnumeratorCancellation] CancellationToken cancellationToken = default)
+    {
+        var accumulator = new BlockAccumulator();
+        while (true)
+        {
+            string? line;
+            try
+            {
+                line = await _reader.ReadLineAsync(cancellationToken);
+            }
+            catch (OperationCanceledException)
+            {
+                yield break;      // cancellation ends the stream cleanly
+            }
+            if (line is null)
+                throw new VideohubProtocolException($"connection to {Host}:{Port} closed");
+
+            if (accumulator.Add(line) is not { } block) continue;
+            if (block.Header is "ACK" or "NAK") continue;   // not ours to interpret here
+
+            var before = _state;
+            ApplyUpdate(block);
+            foreach (var update in VideohubUpdate.Diff(before, _state))
+                yield return update;
+        }
+    }
 
     /// <summary>Routes <paramref name="input"/> to <paramref name="output"/> (both 1-based).</summary>
     public Task SetRouteAsync(int output, int input, CancellationToken cancellationToken = default)

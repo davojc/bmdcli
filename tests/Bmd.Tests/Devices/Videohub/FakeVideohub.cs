@@ -14,6 +14,7 @@ public sealed class FakeVideohub : IAsyncDisposable
     readonly Task _acceptLoop;
     readonly List<Task> _clients = [];
     readonly Lock _gate = new();
+    readonly List<StreamWriter> _writers = [];
     readonly Func<string>? _dumpFactory;      // set only by StartChanging
     readonly bool _rejectEverything;
     readonly bool _ackFirst;
@@ -225,7 +226,12 @@ public sealed class FakeVideohub : IAsyncDisposable
             while (!_cts.IsCancellationRequested)
             {
                 var client = await _listener.AcceptTcpClientAsync(_cts.Token);
-                lock (_gate) _clients.Add(HandleClientAsync(client));
+                // Start the handler OUTSIDE the lock: HandleClientAsync now registers the
+                // connection's writer under _gate before its first await, and starting it
+                // while already holding _gate here would rely on lock reentrancy to do so
+                // (works, but needlessly fragile now that a second registration is involved).
+                var handler = HandleClientAsync(client);
+                lock (_gate) _clients.Add(handler);
             }
         }
         catch (OperationCanceledException) { }
@@ -235,12 +241,14 @@ public sealed class FakeVideohub : IAsyncDisposable
     {
         using (client)
         {
+            StreamWriter? writer = null;
             try
             {
                 var stream = client.GetStream();
                 await stream.WriteAsync(Encoding.UTF8.GetBytes(RenderDump()), _cts.Token);
                 using var reader = new StreamReader(stream, Encoding.UTF8);
-                var writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+                writer = new StreamWriter(stream, new UTF8Encoding(false)) { AutoFlush = true, NewLine = "\n" };
+                lock (_gate) _writers.Add(writer);
                 var accumulator = new BlockAccumulator();
                 // Per-connection allowance for StartFailingAfter — a single-element array so it
                 // can be mutated from ApplyBlock (an async method, which can't take a ref parameter).
@@ -253,7 +261,63 @@ public sealed class FakeVideohub : IAsyncDisposable
             }
             catch (OperationCanceledException) { }
             catch (IOException) { }
+            finally
+            {
+                if (writer is not null) lock (_gate) _writers.Remove(writer);
+            }
         }
+    }
+
+    /// <summary>Snapshots the connected clients' writers under <see cref="_gate"/>, then writes
+    /// to each OUTSIDE the lock (never hold the lock across an await). Swallows the errors of a
+    /// client that has since gone away — a broadcast must never fail just because one listener
+    /// disconnected mid-write.</summary>
+    async Task BroadcastAsync(string header, string line)
+    {
+        List<StreamWriter> snapshot;
+        lock (_gate) snapshot = [.. _writers];
+
+        var text = $"{header}:\n{line}\n\n";
+        foreach (var writer in snapshot)
+        {
+            try { await writer.WriteAsync(text); }
+            catch (IOException) { }
+            catch (ObjectDisposedException) { }
+        }
+    }
+
+    /// <summary>Updates the server's route for wire output <paramref name="output"/> to wire
+    /// input <paramref name="input"/> and broadcasts <c>VIDEO OUTPUT ROUTING</c> to every
+    /// connected client. A no-op (but does not throw) when no client is connected.</summary>
+    public async Task PushRouteAsync(int output, int input)
+    {
+        lock (_gate) _routes[output] = input;
+        await BroadcastAsync("VIDEO OUTPUT ROUTING", $"{output} {input}");
+    }
+
+    /// <summary>Renames wire input <paramref name="input"/> and broadcasts <c>INPUT LABELS</c>
+    /// to every connected client. A no-op (but does not throw) when no client is connected.</summary>
+    public async Task PushInputLabelAsync(int input, string label)
+    {
+        lock (_gate) _inputLabels[input] = label;
+        await BroadcastAsync("INPUT LABELS", $"{input} {label}");
+    }
+
+    /// <summary>Renames wire output <paramref name="output"/> and broadcasts <c>OUTPUT LABELS</c>
+    /// to every connected client. A no-op (but does not throw) when no client is connected.</summary>
+    public async Task PushOutputLabelAsync(int output, string label)
+    {
+        lock (_gate) _outputLabels[output] = label;
+        await BroadcastAsync("OUTPUT LABELS", $"{output} {label}");
+    }
+
+    /// <summary>Sets the lock state (<c>U</c>/<c>O</c>/<c>L</c>) of wire output
+    /// <paramref name="output"/> and broadcasts <c>VIDEO OUTPUT LOCKS</c> to every connected
+    /// client. A no-op (but does not throw) when no client is connected.</summary>
+    public async Task PushLockAsync(int output, char letter)
+    {
+        lock (_gate) _locks[output] = letter;
+        await BroadcastAsync("VIDEO OUTPUT LOCKS", $"{output} {letter}");
     }
 
     /// <summary>Applies (or refuses) one mutation block. Returns false only when the connection

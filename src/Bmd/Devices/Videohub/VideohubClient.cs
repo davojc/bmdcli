@@ -105,6 +105,65 @@ public sealed class VideohubClient : IAsyncDisposable
     /// <summary>Folds a pushed update block into the current state. Unknown blocks are ignored.</summary>
     internal void ApplyUpdate(ProtocolBlock block) => _state = DumpParser.ApplyUpdate(_state, block);
 
+    /// <summary>Routes <paramref name="input"/> to <paramref name="output"/> (both 1-based).</summary>
+    public Task SetRouteAsync(int output, int input, CancellationToken cancellationToken = default)
+    {
+        CheckOutput(output);
+        CheckInput(input);
+        return SendBlockAsync("VIDEO OUTPUT ROUTING", [$"{output - 1} {input - 1}"], cancellationToken);
+    }
+
+    /// <summary>Renames input <paramref name="input"/> (1-based).</summary>
+    public Task RenameInputAsync(int input, string label, CancellationToken cancellationToken = default)
+    {
+        CheckInput(input);
+        CheckLabel(label);
+        return SendBlockAsync("INPUT LABELS", [$"{input - 1} {label}"], cancellationToken);
+    }
+
+    /// <summary>Renames output <paramref name="output"/> (1-based).</summary>
+    public Task RenameOutputAsync(int output, string label, CancellationToken cancellationToken = default)
+    {
+        CheckOutput(output);
+        CheckLabel(label);
+        return SendBlockAsync("OUTPUT LABELS", [$"{output - 1} {label}"], cancellationToken);
+    }
+
+    /// <summary>Takes the lock on output <paramref name="output"/> (1-based).</summary>
+    public Task LockOutputAsync(int output, CancellationToken cancellationToken = default)
+    {
+        CheckOutput(output);
+        return SendBlockAsync("VIDEO OUTPUT LOCKS", [$"{output - 1} O"], cancellationToken);
+    }
+
+    /// <summary>Releases the lock on output <paramref name="output"/> (1-based).
+    /// <paramref name="force"/> clears a lock owned by another controller.</summary>
+    public Task UnlockOutputAsync(int output, bool force = false, CancellationToken cancellationToken = default)
+    {
+        CheckOutput(output);
+        return SendBlockAsync("VIDEO OUTPUT LOCKS", [$"{output - 1} {(force ? 'F' : 'U')}"], cancellationToken);
+    }
+
+    void CheckInput(int input)
+    {
+        if (input < 1 || input > _state.Device.VideoInputs)
+            throw new ArgumentOutOfRangeException(nameof(input), input,
+                $"input must be between 1 and {_state.Device.VideoInputs}");
+    }
+
+    void CheckOutput(int output)
+    {
+        if (output < 1 || output > _state.Device.VideoOutputs)
+            throw new ArgumentOutOfRangeException(nameof(output), output,
+                $"output must be between 1 and {_state.Device.VideoOutputs}");
+    }
+
+    static void CheckLabel(string label)
+    {
+        if (label.Contains('\n') || label.Contains('\r'))
+            throw new ArgumentException("label must not contain newlines", nameof(label));
+    }
+
     public async ValueTask DisposeAsync()
     {
         await _writer.DisposeAsync();

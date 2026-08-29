@@ -20,6 +20,13 @@ public class ConfigKeyTests
     [InlineData(".host")]
     [InlineData("videohub.")]
     [InlineData("")]
+    [InlineData("videohub.a=b")]
+    [InlineData("video hub.host")]
+    [InlineData("videohub.[x")]
+    [InlineData("videohub.a\"b")]
+    [InlineData("videohub.a]b")]
+    [InlineData("videohub.a#b")]
+    [InlineData("videohub.a;b")]
     public void TryParse_RejectsMalformedKeys(string raw)
     {
         Assert.False(ConfigKey.TryParse(raw, out _));

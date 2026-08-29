@@ -79,4 +79,63 @@ public class ConfigCommandsTests : IDisposable
         var line = _stdout.ToString().Trim();
         Assert.Equal($"{Path.Combine(WorkDir, ConfigPaths.LocalFileName)}\tvideohub.host=10.0.0.9", line);
     }
+
+    // --- Finding 1: unhandled IO exceptions must not leak stack traces ---
+
+    [Fact]
+    public void Set_GlobalConfigPathIsDirectory_Exit1_NoStackTrace()
+    {
+        // Make the global config path collide with a directory so the write fails.
+        Directory.CreateDirectory(GlobalPath);
+        Assert.Equal(1, Commands().Set("videohub.host", "10.0.0.5", global: true));
+        var stderr = _stderr.ToString();
+        Assert.StartsWith("error:", stderr);
+        Assert.DoesNotContain("   at ", stderr);
+    }
+
+    [Fact]
+    public void Get_GlobalConfigPathIsDirectory_Exit1_NoStackTrace()
+    {
+        // GetEffective doesn't touch the global path at read time (loaded lazily as empty),
+        // so exercise the failure via a local config directory collision instead.
+        var localConfigPath = Path.Combine(WorkDir, ConfigPaths.LocalFileName);
+        Directory.CreateDirectory(localConfigPath);
+        Assert.Equal(1, Commands().Set("videohub.host", "10.0.0.5"));
+        var stderr = _stderr.ToString();
+        Assert.StartsWith("error:", stderr);
+        Assert.DoesNotContain("   at ", stderr);
+    }
+
+    // --- Finding 2: unvalidated key names / values can corrupt the INI file ---
+
+    [Fact]
+    public void Set_KeyWithInvalidCharacters_Exit2()
+    {
+        Assert.Equal(2, Commands().Set("videohub.a=b", "x"));
+        Assert.Contains("section.key", _stderr.ToString());
+    }
+
+    [Fact]
+    public void Set_ValueWithNewline_Exit2_StderrMessage()
+    {
+        Assert.Equal(2, Commands().Set("videohub.host", "line1\nline2"));
+        var stderr = _stderr.ToString();
+        Assert.StartsWith("error:", stderr);
+    }
+
+    [Fact]
+    public void Set_ValueWithQuote_Exit2_StderrMessage()
+    {
+        Assert.Equal(2, Commands().Set("videohub.host", "has\"quote"));
+        var stderr = _stderr.ToString();
+        Assert.StartsWith("error:", stderr);
+    }
+
+    [Fact]
+    public void SetThenGet_ValueWithSpecialButAllowedChars_RoundTrips()
+    {
+        Assert.Equal(0, Commands().Set("videohub.host", "10.0.0.5 # not a comment"));
+        Assert.Equal(0, Commands().Get("videohub.host"));
+        Assert.Equal("10.0.0.5 # not a comment", _stdout.ToString().Trim());
+    }
 }

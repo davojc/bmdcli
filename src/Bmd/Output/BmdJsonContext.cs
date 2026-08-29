@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Bmd.Commands;
+using Bmd.Commands.Videohub;
 using Bmd.Config;
 
 namespace Bmd.Output;
@@ -10,4 +11,5 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(ConfigSetResult))]
 [JsonSerializable(typeof(ConfigUnsetResult))]
 [JsonSerializable(typeof(ConfigEntry[]))]
+[JsonSerializable(typeof(VideohubInfoResult))]
 public partial class BmdJsonContext : JsonSerializerContext;

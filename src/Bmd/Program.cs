@@ -1,4 +1,5 @@
 using Bmd.Commands;
+using Bmd.Commands.Videohub;
 using ConsoleAppFramework;
 
 var app = ConsoleApp.Create();
@@ -14,5 +15,8 @@ app.Add("config set", config.Set);
 app.Add("config get", config.Get);
 app.Add("config unset", config.Unset);
 app.Add("config list", config.List);
+
+var videohub = new VideohubCommands();
+app.Add("videohub info", videohub.Info);
 
 app.Run(args);

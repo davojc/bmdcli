@@ -98,4 +98,56 @@ public class VideohubCommandsTests : IDisposable
         Assert.Equal(1, await Commands().Info());
         Assert.Contains("videohub.port", _stderr.ToString());
     }
+
+    [Fact]
+    public async Task InputList_Json_OneBasedEntries()
+    {
+        await using var fake = FakeVideohub.Start();
+        Assert.Equal(0, await Commands().InputList(host: "127.0.0.1", port: fake.Port, json: true));
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        Assert.Equal(4, root.GetArrayLength());
+        var first = root[0];
+        Assert.Equal(1, first.GetProperty("n").GetInt32());
+        Assert.Equal("Cam 1", first.GetProperty("label").GetString());
+    }
+
+    [Fact]
+    public async Task OutputList_Json_IncludesRouteAndLock()
+    {
+        await using var fake = FakeVideohub.Start();
+        Assert.Equal(0, await Commands().OutputList(host: "127.0.0.1", port: fake.Port, json: true));
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        var first = root[0]; // output 1: wire route 0←3, lock U
+        Assert.Equal(1, first.GetProperty("n").GetInt32());
+        Assert.Equal("Program", first.GetProperty("label").GetString());
+        Assert.Equal(4, first.GetProperty("input").GetInt32());
+        Assert.Equal("Cam 4", first.GetProperty("inputLabel").GetString());
+        Assert.Equal("unlocked", first.GetProperty("lock").GetString());
+        Assert.Equal("owned", root[1].GetProperty("lock").GetString());
+        Assert.Equal("locked", root[2].GetProperty("lock").GetString());
+    }
+
+    [Fact]
+    public async Task RouteList_Json_OneBasedBothSides()
+    {
+        await using var fake = FakeVideohub.Start();
+        Assert.Equal(0, await Commands().RouteList(host: "127.0.0.1", port: fake.Port, json: true));
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        var first = root[0];
+        Assert.Equal(1, first.GetProperty("output").GetInt32());
+        Assert.Equal("Program", first.GetProperty("outputLabel").GetString());
+        Assert.Equal(4, first.GetProperty("input").GetInt32());
+        Assert.Equal("Cam 4", first.GetProperty("inputLabel").GetString());
+    }
+
+    [Fact]
+    public async Task RouteList_Human_IsTable()
+    {
+        await using var fake = FakeVideohub.Start();
+        Assert.Equal(0, await Commands().RouteList(host: "127.0.0.1", port: fake.Port));
+        var text = _stdout.ToString();
+        Assert.Contains("OUT", text);
+        Assert.Contains("Program", text);
+        Assert.Contains("Cam 4", text);
+    }
 }

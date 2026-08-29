@@ -18,5 +18,8 @@ app.Add("config list", config.List);
 
 var videohub = new VideohubCommands();
 app.Add("videohub info", videohub.Info);
+app.Add("videohub input list", videohub.InputList);
+app.Add("videohub output list", videohub.OutputList);
+app.Add("videohub route list", videohub.RouteList);
 
 app.Run(args);

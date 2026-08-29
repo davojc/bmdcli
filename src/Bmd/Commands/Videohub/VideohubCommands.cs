@@ -42,6 +42,76 @@ public class VideohubCommands
             return 0;
         });
 
+    /// <summary>List inputs (1-based) with their labels.</summary>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> InputList(string? host = null, int? port = null, int? timeout = null, bool json = false)
+        => WithClientAsync(host, port, timeout, client =>
+        {
+            var device = client.State.Device;
+            var entries = Enumerable.Range(1, device.VideoInputs)
+                .Select(n => new VideohubInputEntry(n, client.State.GetInputLabel(n))).ToArray();
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(entries, BmdJsonContext.Default.VideohubInputEntryArray));
+            else
+                Table.Write(["N", "LABEL"], entries.Select(e => (IReadOnlyList<string>)[e.N.ToString(), e.Label]).ToArray());
+            return 0;
+        });
+
+    /// <summary>List outputs (1-based) with label, routed input, and lock state.</summary>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> OutputList(string? host = null, int? port = null, int? timeout = null, bool json = false)
+        => WithClientAsync(host, port, timeout, client =>
+        {
+            var state = client.State;
+            var entries = Enumerable.Range(1, state.Device.VideoOutputs)
+                .Select(n => new VideohubOutputEntry(
+                    n, state.GetOutputLabel(n), state.GetRoute(n),
+                    state.GetInputLabel(state.GetRoute(n)), LockWord(state.GetLock(n))))
+                .ToArray();
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(entries, BmdJsonContext.Default.VideohubOutputEntryArray));
+            else
+                Table.Write(["N", "LABEL", "INPUT", "INPUT LABEL", "LOCK"],
+                    entries.Select(e => (IReadOnlyList<string>)
+                        [e.N.ToString(), e.Label, e.Input.ToString(), e.InputLabel, e.Lock]).ToArray());
+            return 0;
+        });
+
+    /// <summary>List the current routing (1-based): which input feeds each output.</summary>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> RouteList(string? host = null, int? port = null, int? timeout = null, bool json = false)
+        => WithClientAsync(host, port, timeout, client =>
+        {
+            var state = client.State;
+            var entries = Enumerable.Range(1, state.Device.VideoOutputs)
+                .Select(n => new VideohubRouteEntry(
+                    n, state.GetOutputLabel(n), state.GetRoute(n), state.GetInputLabel(state.GetRoute(n))))
+                .ToArray();
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(entries, BmdJsonContext.Default.VideohubRouteEntryArray));
+            else
+                Table.Write(["OUT", "OUTPUT LABEL", "IN", "INPUT LABEL"],
+                    entries.Select(e => (IReadOnlyList<string>)
+                        [e.Output.ToString(), e.OutputLabel, e.Input.ToString(), e.InputLabel]).ToArray());
+            return 0;
+        });
+
+    static string LockWord(LockState lockState) => lockState switch
+    {
+        LockState.Owned => "owned",
+        LockState.Locked => "locked",
+        _ => "unlocked",
+    };
+
     async Task<int> WithClientAsync(string? host, int? port, int? timeout, Func<VideohubClient, int> action)
     {
         try

@@ -15,12 +15,18 @@ public class DiscoverCommandsTests : IDisposable
     readonly StringWriter _stderr = new();
     readonly TextWriter _origOut = Console.Out;
     readonly TextWriter _origErr = Console.Error;
+    readonly TextReader _origIn = Console.In;
 
     string GlobalPath => Path.Combine(_root, "global", "config");
     string WorkDir => Path.Combine(_root, "work");
+    string LocalConfigPath => Path.Combine(WorkDir, ".bmdconfig");
 
     static readonly DiscoveredDevice Hub =
         new("Hub One", "Videohub", "videohub", IPAddress.Parse("192.168.1.10"), 9990);
+    static readonly DiscoveredDevice HubTwo =
+        new("Hub Two", "Videohub", "videohub", IPAddress.Parse("192.168.1.11"), 9990);
+    static readonly DiscoveredDevice HubOddPort =
+        new("Hub Odd Port", "Videohub", "videohub", IPAddress.Parse("192.168.1.12"), 9991);
     static readonly DiscoveredDevice Unsupported =
         new("Switcher", "AtemSwitcher", null, IPAddress.Parse("192.168.1.20"), 9910);
 
@@ -35,14 +41,20 @@ public class DiscoverCommandsTests : IDisposable
     {
         Console.SetOut(_origOut);
         Console.SetError(_origErr);
+        Console.SetIn(_origIn);
         Directory.Delete(_root, recursive: true);
     }
 
-    DiscoverCommands Commands(IReadOnlyList<DiscoveredDevice> devices) =>
-        new((timeout, ct) => Task.FromResult(devices), () => ConfigStore.Load(GlobalPath, WorkDir));
+    // `interactive` defaults true so --add tests exercise the prompt/selection logic without
+    // tripping the non-interactive guard — Console.IsInputRedirected is true under the test
+    // runner regardless, which is exactly why that guard has to be injectable at all.
+    DiscoverCommands Commands(IReadOnlyList<DiscoveredDevice> devices, bool interactive = true) =>
+        new((timeout, ct) => Task.FromResult(devices), () => ConfigStore.Load(GlobalPath, WorkDir), () => interactive);
 
     DiscoverCommands FailingCommands(Exception exception) =>
         new((timeout, ct) => throw exception, () => ConfigStore.Load(GlobalPath, WorkDir));
+
+    static void SetIn(string input) => Console.SetIn(new StringReader(input));
 
     [Fact]
     public async Task Discover_ListsOnlySupportedDevicesByDefault()
@@ -126,5 +138,173 @@ public class DiscoverCommandsTests : IDisposable
         Assert.Equal(0, await Commands([Unsupported, Hub]).Discover(all: true));
         var text = _stdout.ToString();
         Assert.True(text.IndexOf("Hub One", StringComparison.Ordinal) < text.IndexOf("Switcher", StringComparison.Ordinal));
+    }
+
+    // --- --add -------------------------------------------------------------------------------
+
+    [Fact]
+    public async Task Add_ValidSelection_WritesHostToLocalConfig_ConfirmsOnStdout()
+    {
+        SetIn("1\n");
+        Assert.Equal(0, await Commands([Hub]).Discover(add: true));
+
+        Assert.Equal("Set videohub.host = 192.168.1.10 in " + LocalConfigPath, _stdout.ToString().Trim());
+        Assert.Contains("1. Hub One (videohub)", _stderr.ToString());
+        Assert.Contains("Select a device [1-1] (or q to cancel):", _stderr.ToString());
+
+        var store = ConfigStore.Load(GlobalPath, WorkDir);
+        Assert.True(ConfigKey.TryParse("videohub.host", out var hostKey));
+        Assert.Equal("192.168.1.10", store.GetEffective(hostKey));
+        Assert.True(ConfigKey.TryParse("videohub.port", out var portKey));
+        Assert.Null(store.GetEffective(portKey)); // default port is not written
+    }
+
+    [Fact]
+    public async Task Add_ExactlyOneSupportedDevice_StillPrompts()
+    {
+        // Only one candidate on the network is not license to skip confirmation — --add must
+        // still show the numbered list and wait for the user to type "1".
+        SetIn("");
+        Assert.Equal(0, await Commands([Hub]).Discover(add: true));
+        Assert.Contains("Select a device", _stderr.ToString());
+        Assert.False(File.Exists(LocalConfigPath));
+    }
+
+    [Fact]
+    public async Task Add_SecondOfTwo_SelectsCorrectDeviceByNumber()
+    {
+        SetIn("2\n");
+        Assert.Equal(0, await Commands([Hub, HubTwo]).Discover(add: true));
+
+        var store = ConfigStore.Load(GlobalPath, WorkDir);
+        Assert.True(ConfigKey.TryParse("videohub.host", out var hostKey));
+        Assert.Equal("192.168.1.11", store.GetEffective(hostKey));
+        Assert.Contains("1. Hub One (videohub)", _stderr.ToString());
+        Assert.Contains("2. Hub Two (videohub)", _stderr.ToString());
+    }
+
+    [Fact]
+    public async Task Add_NonDefaultPort_AlsoWritesPort()
+    {
+        SetIn("1\n");
+        Assert.Equal(0, await Commands([HubOddPort]).Discover(add: true));
+
+        var text = _stdout.ToString();
+        Assert.Contains("Set videohub.host = 192.168.1.12 in " + LocalConfigPath, text);
+        Assert.Contains("Set videohub.port = 9991 in " + LocalConfigPath, text);
+
+        var store = ConfigStore.Load(GlobalPath, WorkDir);
+        Assert.True(ConfigKey.TryParse("videohub.port", out var portKey));
+        Assert.Equal("9991", store.GetEffective(portKey));
+    }
+
+    [Fact]
+    public async Task Add_Json_EmitsConfigSetResultShape()
+    {
+        SetIn("1\n");
+        Assert.Equal(0, await Commands([Hub]).Discover(add: true, json: true));
+
+        var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
+        Assert.Equal("videohub.host", root.GetProperty("key").GetString());
+        Assert.Equal("192.168.1.10", root.GetProperty("value").GetString());
+        Assert.Equal(LocalConfigPath, root.GetProperty("file").GetString());
+    }
+
+    [Theory]
+    [InlineData("q\n")]
+    [InlineData("Q\n")]
+    [InlineData("\n")]
+    [InlineData("")]
+    public async Task Add_CancelInput_Exit0_NothingWritten(string input)
+    {
+        SetIn(input);
+        Assert.Equal(0, await Commands([Hub]).Discover(add: true));
+        Assert.Equal("", _stdout.ToString());
+        Assert.False(File.Exists(LocalConfigPath));
+    }
+
+    [Theory]
+    [InlineData("0\n")]      // below range
+    [InlineData("2\n")]      // above range (only one device offered)
+    [InlineData("999999999999999\n")] // overflows int
+    [InlineData("abc\n")]    // non-numeric
+    [InlineData("1.5\n")]    // non-integer
+    public async Task Add_InvalidSelection_Exit2_NothingWritten(string input)
+    {
+        SetIn(input);
+        Assert.Equal(2, await Commands([Hub]).Discover(add: true));
+        Assert.Equal("", _stdout.ToString());
+        Assert.Contains("error:", _stderr.ToString());
+        Assert.False(File.Exists(LocalConfigPath));
+    }
+
+    [Fact]
+    public async Task Add_SelectionWithSurroundingWhitespace_IsTrimmed()
+    {
+        SetIn("  1  \n");
+        Assert.Equal(0, await Commands([Hub]).Discover(add: true));
+        Assert.Contains("Set videohub.host", _stdout.ToString());
+    }
+
+    [Fact]
+    public async Task Add_NonInteractive_Exit2_NothingWritten()
+    {
+        // No stdin redirect needed here — Commands(interactive: false) drives the injectable
+        // seam directly, proving the guard reads the seam rather than the real console state.
+        Assert.Equal(2, await Commands([Hub], interactive: false).Discover(add: true));
+        Assert.Equal("", _stdout.ToString());
+        Assert.Contains("error: --add needs an interactive terminal", _stderr.ToString());
+        Assert.Contains("bmd config set", _stderr.ToString());
+        Assert.False(File.Exists(LocalConfigPath));
+    }
+
+    [Fact]
+    public async Task Add_NoSupportedDevices_Exit0_HelpfulNote_NothingWritten()
+    {
+        // Nothing to add is decided before the interactive guard, so this must not need stdin
+        // at all — an empty SetIn would still make the point, but omitting it entirely shows
+        // the command never even tries to read a line.
+        Assert.Equal(0, await Commands([Unsupported], interactive: false).Discover(add: true));
+        Assert.Equal("", _stdout.ToString());
+        var err = _stderr.ToString();
+        Assert.Contains("mDNS", err);
+        Assert.Contains("subnet", err);
+        Assert.DoesNotContain("Select a device", err);
+        Assert.False(File.Exists(LocalConfigPath));
+    }
+
+    [Fact]
+    public async Task AddAll_IsAUsageError_Exit2()
+    {
+        Assert.Equal(2, await Commands([Hub]).Discover(add: true, all: true));
+        Assert.Equal("", _stdout.ToString());
+        Assert.StartsWith("error:", _stderr.ToString());
+        Assert.False(File.Exists(LocalConfigPath));
+    }
+
+    [Fact]
+    public async Task Add_Global_WritesToGlobalFileNotLocal()
+    {
+        SetIn("1\n");
+        Assert.Equal(0, await Commands([Hub]).Discover(add: true, global: true));
+
+        Assert.Contains("Set videohub.host = 192.168.1.10 in " + GlobalPath, _stdout.ToString());
+        Assert.False(File.Exists(LocalConfigPath));
+        Assert.True(File.Exists(GlobalPath));
+        Assert.Contains("192.168.1.10", File.ReadAllText(GlobalPath));
+    }
+
+    [Fact]
+    public async Task Add_StorePathUnwritable_Exit1_CleanError()
+    {
+        // Make the global config path itself an existing directory, so ConfigStore.Set's
+        // File.WriteAllText fails with an IO/permission error instead of writing a file.
+        Directory.CreateDirectory(GlobalPath);
+        SetIn("1\n");
+        Assert.Equal(1, await Commands([Hub]).Discover(add: true, global: true));
+        var err = _stderr.ToString();
+        Assert.Contains("error:", err);
+        Assert.DoesNotContain("   at ", err);
+        Assert.Equal("", _stdout.ToString());
     }
 }

@@ -49,7 +49,47 @@ public sealed record VideohubSnapshot(
             throw new SnapshotFormatException($"snapshot claims {snapshot.VideoInputs} inputs but lists {snapshot.Inputs.Length}");
         if (snapshot.VideoOutputs != snapshot.Outputs.Length)
             throw new SnapshotFormatException($"snapshot claims {snapshot.VideoOutputs} outputs but lists {snapshot.Outputs.Length}");
+        ValidateEntries(snapshot);
         return snapshot;
+    }
+
+    static void ValidateEntries(VideohubSnapshot snapshot)
+    {
+        var seenInputs = new HashSet<int>();
+        foreach (var input in snapshot.Inputs)
+        {
+            if (input.N < 1 || input.N > snapshot.VideoInputs)
+                throw new SnapshotFormatException(
+                    $"snapshot has input {input.N}, outside the valid range 1-{snapshot.VideoInputs}");
+            if (!seenInputs.Add(input.N))
+                throw new SnapshotFormatException($"snapshot has duplicate entries for input {input.N}");
+        }
+
+        var seenOutputs = new HashSet<int>();
+        foreach (var output in snapshot.Outputs)
+        {
+            if (output.N < 1 || output.N > snapshot.VideoOutputs)
+                throw new SnapshotFormatException(
+                    $"snapshot has output {output.N}, outside the valid range 1-{snapshot.VideoOutputs}");
+            if (!seenOutputs.Add(output.N))
+                throw new SnapshotFormatException($"snapshot has duplicate entries for output {output.N}");
+            if (output.Input < 1 || output.Input > snapshot.VideoInputs)
+                throw new SnapshotFormatException(
+                    $"snapshot routes output {output.N} to input {output.Input}, outside the valid range 1-{snapshot.VideoInputs}");
+        }
+    }
+
+    /// <summary>Reasons this snapshot cannot be applied to the given device; empty when it can.</summary>
+    public IReadOnlyList<string> IncompatibilityWith(VideohubDeviceInfo device)
+    {
+        var problems = new List<string>();
+        if (!string.Equals(device.ModelName, Device, StringComparison.Ordinal))
+            problems.Add($"snapshot is from '{Device}' but the device is '{device.ModelName}'");
+        if (device.VideoInputs != VideoInputs)
+            problems.Add($"snapshot has {VideoInputs} inputs but the device has {device.VideoInputs}");
+        if (device.VideoOutputs != VideoOutputs)
+            problems.Add($"snapshot has {VideoOutputs} outputs but the device has {device.VideoOutputs}");
+        return problems;
     }
 
     /// <summary>Lines describing how the device differs from this snapshot; empty when identical.</summary>

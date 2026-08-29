@@ -139,4 +139,110 @@ public class DnsMessageTests
         Assert.Equal("_blackmagic._tcp.local", a.Name);
         Assert.Equal(IPAddress.Parse("10.0.0.5"), a.Address);
     }
+
+    [Fact]
+    public void ParseRecords_NameLongerThan255Bytes_ThrowsInsteadOfWalkingWholeChain()
+    {
+        // A single run of labels whose DECODED length exceeds 255 bytes (RFC 1035 §2.3.4's
+        // limit), reached via one compression hop from the record's name. Proves the
+        // per-name length cap fires before the whole chain is walked and joined into a
+        // string, regardless of how large a hostile message packs the chain.
+        var chain = new List<byte>();
+        for (int i = 0; i < 5; i++)
+        {
+            chain.Add(63);
+            chain.AddRange(Enumerable.Repeat((byte)'a', 63));
+        }
+        chain.Add(0x00); // root terminator
+
+        var bytes = new List<byte>();
+        bytes.AddRange(Convert.FromHexString("000084000000000100000000")); // header, ANCOUNT=1
+        bytes.AddRange(chain);                                             // offset 12
+        bytes.Add(0xC0);
+        bytes.Add(0x0C);                                                   // record name: 1 hop to offset 12
+        bytes.AddRange(Convert.FromHexString("001C0001000000780000"));     // TYPE=28, CLASS=IN, TTL=120, RDLENGTH=0
+
+        Assert.Throws<DnsFormatException>(() => DnsMessage.ParseRecords(bytes.ToArray()));
+    }
+
+    [Fact]
+    public void ParseRecords_NameAt255Bytes_ParsesButOneByteOver_Throws()
+    {
+        // Boundary check for the 255-byte cap: exactly at the limit parses fine (4 labels of
+        // 63 bytes plus 3 separating dots = 255); one byte past it throws.
+        static byte[] BuildMessage(int[] labelLengths)
+        {
+            var name = new List<byte>();
+            foreach (var length in labelLengths)
+            {
+                name.Add((byte)length);
+                name.AddRange(Enumerable.Repeat((byte)'a', length));
+            }
+            name.Add(0x00);
+
+            var bytes = new List<byte>();
+            bytes.AddRange(Convert.FromHexString("000084000000000100000000")); // header, ANCOUNT=1
+            bytes.AddRange(name);
+            bytes.AddRange(Convert.FromHexString("001C0001000000780000")); // TYPE=28, CLASS=IN, TTL=120, RDLENGTH=0
+            return bytes.ToArray();
+        }
+
+        var atLimit = DnsMessage.ParseRecords(BuildMessage([63, 63, 63, 63])); // 63*4 + 3 dots = 255
+        Assert.Single(atLimit);
+
+        // 63+63+63+62+1 + 4 dots = 256
+        Assert.Throws<DnsFormatException>(() => DnsMessage.ParseRecords(BuildMessage([63, 63, 63, 62, 1])));
+    }
+
+    [Fact]
+    public void ParseRecords_SixteenHops_ParsesButSeventeenHops_Throws()
+    {
+        // Record 1 is a dummy (unknown-type) record whose RDATA holds a chain of "anchors"
+        // at increasing offsets: anchor[0] is a root byte (0x00, terminal); anchor[k] for
+        // k >= 1 is a 2-byte compression pointer to anchor[k-1]. Reading a name that starts
+        // at anchor[k] costs exactly k hops. This mirrors how the golden fixture's SRV/A
+        // records legitimately point into another record's RDATA. Record 2's name is a
+        // single pointer to anchor[k], so it costs 1 + k hops. Every offset below is derived
+        // from the byte list's own length as it is built, not hand-computed, to avoid the
+        // arithmetic pitfall this whole feature exists to catch.
+        byte[] BuildMessage(int hopTargetAnchor)
+        {
+            var bytes = new List<byte>();
+            bytes.AddRange(Convert.FromHexString("000084000000000200000000")); // header, ANCOUNT=2
+            bytes.Add(0x00); // record 1 name: root
+            bytes.AddRange(Convert.FromHexString("001C000100000078")); // TYPE=28 (unknown), CLASS=IN, TTL=120
+            int rdLengthOffset = bytes.Count;
+            bytes.Add(0);
+            bytes.Add(0); // RDLENGTH placeholder, patched below once the chain size is known
+
+            int rdataStart = bytes.Count; // record 1's RDATA (the anchor chain) starts here
+            var anchorPos = new int[17];
+            int offset = rdataStart;
+            bytes.Add(0x00); // anchor[0]: root
+            anchorPos[0] = offset;
+            offset += 1;
+            for (int k = 1; k <= 16; k++)
+            {
+                anchorPos[k] = offset;
+                int target = anchorPos[k - 1];
+                bytes.Add((byte)(0xC0 | (target >> 8)));
+                bytes.Add((byte)(target & 0xFF));
+                offset += 2;
+            }
+            int rdLength = bytes.Count - rdataStart;
+            bytes[rdLengthOffset] = (byte)(rdLength >> 8);
+            bytes[rdLengthOffset + 1] = (byte)(rdLength & 0xFF);
+
+            int hopTarget = anchorPos[hopTargetAnchor];
+            bytes.Add((byte)(0xC0 | (hopTarget >> 8)));
+            bytes.Add((byte)(hopTarget & 0xFF));                                // record 2 name: 1 hop to anchor[k]
+            bytes.AddRange(Convert.FromHexString("001C0001000000780000"));      // TYPE=28, CLASS=IN, TTL=120, RDLENGTH=0
+            return bytes.ToArray();
+        }
+
+        var legal = DnsMessage.ParseRecords(BuildMessage(15)); // 1 + 15 = 16 hops: allowed
+        Assert.Equal(2, legal.Count);
+
+        Assert.Throws<DnsFormatException>(() => DnsMessage.ParseRecords(BuildMessage(16))); // 1 + 16 = 17 hops: rejected
+    }
 }

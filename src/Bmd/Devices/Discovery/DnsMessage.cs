@@ -20,6 +20,13 @@ public static class DnsMessage
 {
     const int MaxPointerHops = 16;
 
+    // RFC 1035 §2.3.4: a domain name (label octets plus the length octets, excluding the
+    // terminating pointer/root) is limited to 255 octets. We track the decoded (dot-joined)
+    // length instead, which is bounded by the same constant and is simpler to accumulate
+    // while walking labels; this caps per-name work to a constant regardless of how large a
+    // hostile message is, even when a single compression hop lands on a long label chain.
+    const int MaxNameLength = 255;
+
     /// <summary>Builds a standard mDNS PTR query: header (id 0, flags 0, QDCOUNT 1),
     /// one question with QTYPE=PTR, QCLASS=IN.</summary>
     public static byte[] EncodeQuery(string serviceName)
@@ -105,17 +112,17 @@ public static class DnsMessage
     static PtrRecord ReadPtrRecord(ReadOnlySpan<byte> message, string name, int rdataStart, int rdataEnd)
     {
         int cursor = rdataStart;
-        var target = ReadName(message, ref cursor);
+        var target = ReadName(message, ref cursor, rdataEnd);
         if (cursor > rdataEnd) throw new DnsFormatException("PTR target overruns RDATA");
         return new PtrRecord(name, target);
     }
 
     static SrvRecord ReadSrvRecord(ReadOnlySpan<byte> message, string name, int rdataStart, int rdataEnd)
     {
-        RequireBytes(message, rdataStart, 6); // priority(2) weight(2) port(2)
+        RequireBytes(message, rdataStart, 6, rdataEnd); // priority(2) weight(2) port(2)
         int port = ReadUInt16(message, rdataStart + 4);
         int cursor = rdataStart + 6;
-        var target = ReadName(message, ref cursor);
+        var target = ReadName(message, ref cursor, rdataEnd);
         if (cursor > rdataEnd) throw new DnsFormatException("SRV target overruns RDATA");
         return new SrvRecord(name, target, port);
     }
@@ -143,13 +150,17 @@ public static class DnsMessage
 
     /// <summary>Reads a (possibly compressed) DNS name starting at <paramref name="pos"/>,
     /// advancing it past the name as it appears in the outer record (i.e. past the two
-    /// bytes of a pointer, never following the jump for the outer cursor).</summary>
-    static string ReadName(ReadOnlySpan<byte> message, ref int pos)
+    /// bytes of a pointer, never following the jump for the outer cursor). When
+    /// <paramref name="limit"/> is given, the forward (not-yet-jumped) portion of the read
+    /// may not extend past it — used to keep a record's embedded name inside its own RDATA
+    /// before any compression pointer is followed.</summary>
+    static string ReadName(ReadOnlySpan<byte> message, ref int pos, int? limit = null)
     {
         var labels = new List<string>();
         int cursor = pos;
         bool jumped = false;
         int hops = 0;
+        int totalLength = 0; // decoded (dot-joined) length so far; bounded regardless of message size
 
         while (true)
         {
@@ -159,6 +170,9 @@ public static class DnsMessage
             if ((lengthByte & 0xC0) == 0xC0)
             {
                 RequireBytes(message, cursor, 2);
+                if (!jumped && limit.HasValue && cursor + 2 > limit.Value)
+                    throw new DnsFormatException("DNS name pointer overruns RDATA");
+
                 int pointerPos = cursor;
                 int offset = ((lengthByte & 0x3F) << 8) | message[cursor + 1];
 
@@ -180,11 +194,23 @@ public static class DnsMessage
             if (lengthByte == 0)
             {
                 cursor += 1;
+                if (!jumped && limit.HasValue && cursor > limit.Value)
+                    throw new DnsFormatException("DNS name overruns RDATA");
                 if (!jumped) pos = cursor;
                 break;
             }
 
             RequireBytes(message, cursor + 1, lengthByte);
+            if (!jumped && limit.HasValue && cursor + 1 + lengthByte > limit.Value)
+                throw new DnsFormatException("DNS name overruns RDATA");
+
+            // Cap total decoded length (labels + separating dots) to bound per-name work to a
+            // constant, regardless of message size: a hostile message can pack a single ~50KB
+            // chain of labels once, then have hundreds of minimal records each spend one
+            // compression hop re-walking and re-allocating the whole chain.
+            totalLength += labels.Count > 0 ? 1 + lengthByte : lengthByte;
+            if (totalLength > MaxNameLength) throw new DnsFormatException("DNS name exceeds 255 bytes");
+
             labels.Add(Encoding.ASCII.GetString(message.Slice(cursor + 1, lengthByte)));
             cursor += 1 + lengthByte;
             if (!jumped) pos = cursor;
@@ -195,9 +221,10 @@ public static class DnsMessage
 
     static int ReadUInt16(ReadOnlySpan<byte> message, int pos) => (message[pos] << 8) | message[pos + 1];
 
-    static void RequireBytes(ReadOnlySpan<byte> message, int pos, int count)
+    static void RequireBytes(ReadOnlySpan<byte> message, int pos, int count, int? limit = null)
     {
-        if (pos < 0 || count < 0 || pos + count > message.Length)
+        int max = limit ?? message.Length;
+        if (pos < 0 || count < 0 || pos + count > max)
             throw new DnsFormatException("message is truncated");
     }
 }

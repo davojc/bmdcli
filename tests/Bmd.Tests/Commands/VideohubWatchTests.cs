@@ -94,7 +94,7 @@ public class VideohubWatchTests : IDisposable
             () => Stdout().Contains("Preview B"), Bound);
 
         await cts.CancelAsync();
-        Assert.Equal(0, await watching);
+        Assert.Equal(0, await watching.WaitAsync(Bound));
     }
 
     [Fact]
@@ -111,7 +111,7 @@ public class VideohubWatchTests : IDisposable
             () => Stdout().Contains("Preview B"), Bound);
 
         await cts.CancelAsync();
-        Assert.Equal(0, await watching);
+        Assert.Equal(0, await watching.WaitAsync(Bound));
 
         var lines = Stdout().Split('\n', StringSplitOptions.RemoveEmptyEntries);
         Assert.True(lines.Length >= 2);
@@ -139,7 +139,7 @@ public class VideohubWatchTests : IDisposable
         await WaitUntil(() => Stderr().Contains("Watching"), Bound);
 
         await cts.CancelAsync();
-        Assert.Equal(0, await watching);
+        Assert.Equal(0, await watching.WaitAsync(Bound));
 
         Assert.Contains("Watching", Stderr());
         Assert.Contains("127.0.0.1", Stderr());
@@ -156,7 +156,7 @@ public class VideohubWatchTests : IDisposable
         await PushUntilSeen(i => fake.PushRouteAsync(0, i % 2), () => Stdout().Contains("route 1:"), Bound);
 
         await cts.CancelAsync();
-        Assert.Equal(0, await watching);
+        Assert.Equal(0, await watching.WaitAsync(Bound));
     }
 
     [Fact]

@@ -1,0 +1,355 @@
+/* bmd project site — hand-written, no framework.
+   System font stack for prose, monospace for commands/output. No web fonts. */
+
+:root {
+  --bg: #fbfbfa;
+  --bg-raised: #f2f2f1;
+  --fg: #1b1e22;
+  --fg-muted: #5b6169;
+  --border: #dfe1e4;
+  --accent: #0757d8;
+  --accent-fg: #ffffff;
+  --danger: #9a3412;
+
+  /* The demo terminal keeps a fixed dark palette in both color schemes —
+     a real terminal doesn't relabel itself for your OS theme, and it keeps
+     the contrast check to one combination instead of four. */
+  --term-bg: #0d1117;
+  --term-fg: #d7dde3;
+  --term-muted: #7d8590;
+  --term-prompt: #7ee787;
+
+  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
+    sans-serif;
+  --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
+}
+
+@media (prefers-color-scheme: dark) {
+  :root {
+    --bg: #14161a;
+    --bg-raised: #1b1e23;
+    --fg: #e7e9ec;
+    --fg-muted: #9aa1ab;
+    --border: #2c2f36;
+    --accent: #6ea8fe;
+    --accent-fg: #0b1220;
+    --danger: #fca5a5;
+  }
+}
+
+* {
+  box-sizing: border-box;
+}
+
+html {
+  color-scheme: light dark;
+}
+
+body {
+  margin: 0;
+  background: var(--bg);
+  color: var(--fg);
+  font-family: var(--font-sans);
+  line-height: 1.55;
+  -webkit-text-size-adjust: 100%;
+}
+
+.page {
+  max-width: 46rem;
+  margin: 0 auto;
+  padding: 2.5rem 1.25rem 4rem;
+}
+
+a {
+  color: var(--accent);
+}
+
+a:hover,
+a:focus-visible {
+  text-decoration-thickness: 2px;
+}
+
+code,
+pre,
+kbd {
+  font-family: var(--font-mono);
+  font-size: 0.9em;
+}
+
+section {
+  margin-top: 3rem;
+}
+
+h1,
+h2,
+h3 {
+  line-height: 1.2;
+  font-weight: 600;
+}
+
+h2 {
+  font-size: 1.25rem;
+  border-bottom: 1px solid var(--border);
+  padding-bottom: 0.4rem;
+  margin-bottom: 1rem;
+}
+
+/* ---------- Header ---------- */
+
+.hero {
+  margin-top: 0;
+}
+
+.hero-title {
+  display: flex;
+  align-items: baseline;
+  gap: 0.6rem;
+  flex-wrap: wrap;
+  margin: 0 0 0.5rem;
+}
+
+.hero-title h1 {
+  margin: 0;
+  font-size: 2.4rem;
+  font-family: var(--font-mono);
+  letter-spacing: -0.02em;
+}
+
+.hero-title .prompt {
+  color: var(--fg-muted);
+  font-family: var(--font-mono);
+  font-size: 1.1rem;
+}
+
+.tagline {
+  font-size: 1.15rem;
+  color: var(--fg-muted);
+  margin: 0 0 1.25rem;
+  max-width: 38rem;
+}
+
+.status-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: flex;
+  flex-direction: column;
+  gap: 0.35rem;
+  font-size: 0.95rem;
+}
+
+.status-list li {
+  display: flex;
+  align-items: baseline;
+  gap: 0.5rem;
+}
+
+.status-dot {
+  font-family: var(--font-mono);
+  width: 1.1em;
+  flex: none;
+}
+
+.status-ok .status-dot {
+  color: #1a7f37;
+}
+
+@media (prefers-color-scheme: dark) {
+  .status-ok .status-dot {
+    color: #56d364;
+  }
+}
+
+.status-pending .status-dot,
+.status-pending {
+  color: var(--fg-muted);
+}
+
+/* ---------- Demo terminal ---------- */
+
+.terminal {
+  background: var(--term-bg);
+  color: var(--term-fg);
+  border-radius: 8px;
+  padding: 1.1rem 1.2rem;
+  overflow-x: auto;
+  border: 1px solid #000;
+}
+
+.terminal pre {
+  margin: 0;
+  white-space: pre;
+}
+
+.terminal .prompt-line {
+  color: var(--term-fg);
+}
+
+.terminal .prompt-sign {
+  color: var(--term-prompt);
+}
+
+.terminal .out {
+  color: var(--term-fg);
+}
+
+.terminal .muted {
+  color: var(--term-muted);
+  font-style: italic;
+}
+
+.terminal .cmd-gap {
+  display: block;
+  height: 0.85em;
+}
+
+.demo-note {
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+  margin-top: 0.6rem;
+}
+
+/* ---------- Downloads ---------- */
+
+.downloads {
+  display: grid;
+  grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
+  gap: 0.75rem;
+  padding: 0;
+  margin: 0 0 1rem;
+  list-style: none;
+}
+
+.download-link {
+  display: flex;
+  flex-direction: column;
+  gap: 0.15rem;
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--border);
+  border-radius: 8px;
+  background: var(--bg-raised);
+  color: var(--fg);
+  text-decoration: none;
+  min-height: 44px;
+  justify-content: center;
+}
+
+.download-link:hover,
+.download-link:focus-visible {
+  border-color: var(--accent);
+}
+
+.download-link .platform {
+  font-weight: 600;
+}
+
+.download-link .filename {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  color: var(--fg-muted);
+}
+
+.download-link .badge {
+  display: inline-block;
+  margin-top: 0.35rem;
+  font-size: 0.75rem;
+  font-weight: 600;
+  color: var(--accent-fg);
+  background: var(--accent);
+  border-radius: 999px;
+  padding: 0.1rem 0.55rem;
+  width: fit-content;
+}
+
+.download-link.is-recommended {
+  border-color: var(--accent);
+  border-width: 2px;
+  padding: calc(0.85rem - 1px) calc(1rem - 1px);
+}
+
+.verify {
+  font-size: 0.95rem;
+  color: var(--fg-muted);
+}
+
+.verify code {
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 4px;
+  padding: 0.05rem 0.35rem;
+}
+
+/* ---------- Quick start ---------- */
+
+.steps {
+  margin: 0;
+  padding-left: 1.4rem;
+}
+
+.steps li {
+  margin-bottom: 1rem;
+}
+
+.steps li:last-child {
+  margin-bottom: 0;
+}
+
+.steps pre {
+  margin: 0.4rem 0 0;
+  background: var(--bg-raised);
+  border: 1px solid var(--border);
+  border-radius: 6px;
+  padding: 0.6rem 0.8rem;
+  overflow-x: auto;
+}
+
+/* ---------- Guide callout ---------- */
+
+.guide-callout {
+  border: 1px solid var(--border);
+  background: var(--bg-raised);
+  border-radius: 8px;
+  padding: 1rem 1.2rem;
+}
+
+.guide-callout p {
+  margin: 0 0 0.6rem;
+}
+
+.guide-callout p:last-child {
+  margin-bottom: 0;
+}
+
+/* ---------- Footer ---------- */
+
+footer {
+  margin-top: 3.5rem;
+  padding-top: 1.5rem;
+  border-top: 1px solid var(--border);
+  font-size: 0.9rem;
+  color: var(--fg-muted);
+}
+
+footer p {
+  margin: 0.4rem 0;
+}
+
+footer .disclaimer {
+  font-size: 0.82rem;
+}
+
+/* ---------- Small screens ---------- */
+
+@media (max-width: 420px) {
+  .page {
+    padding: 1.5rem 1rem 3rem;
+  }
+
+  .hero-title h1 {
+    font-size: 2rem;
+  }
+
+  .tagline {
+    font-size: 1.05rem;
+  }
+}

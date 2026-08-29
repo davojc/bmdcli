@@ -106,6 +106,49 @@ public class VideohubCommands
             return 0;
         });
 
+    /// <summary>Stream device changes as they happen, including changes made by other controllers. Numbering is 1-based.</summary>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config videohub.timeout, else 5. Watching itself never times out.</param>
+    /// <param name="json">Emit one JSON object per line as updates arrive.</param>
+    /// <param name="cancellationToken">Cancelled by Ctrl+C.</param>
+    public Task<int> Watch(
+        string? host = null, int? port = null, int? timeout = null, bool json = false,
+        CancellationToken cancellationToken = default)
+        => RunWithClientAsync(host, port, timeout, async client =>
+        {
+            // The header is diagnostic chatter about the watch itself, not part of the data
+            // stream — it goes to stderr so stdout stays pure for piping (`bmd videohub watch |
+            // head`), and is suppressed entirely in --json mode, which has no room for it since
+            // every stdout line must parse as one of the JSON Lines objects.
+            if (!json)
+                Console.Error.WriteLine($"Watching {client.Host}:{client.Port} — press Ctrl+C to stop");
+
+            await foreach (var update in client.WatchAsync(cancellationToken))
+            {
+                if (json)
+                    Console.WriteLine(JsonSerializer.Serialize(
+                        new VideohubUpdateResult(KindWord(update.Kind), update.N, update.From, update.To),
+                        BmdJsonContext.Default.VideohubUpdateResult));
+                else
+                    Console.WriteLine(update.Describe());
+            }
+            // Cancellation (Ctrl+C) is how a watch normally ends — WatchAsync ends the sequence
+            // cleanly on cancellation rather than throwing, and this returns 0 rather than
+            // treating the interruption as a failure. A dropped connection is a different path:
+            // WatchAsync throws VideohubProtocolException, which the shared catch filter in
+            // RunCatchingAsync maps to an "error:" line and exit 1.
+            return 0;
+        });
+
+    static string KindWord(VideohubUpdateKind kind) => kind switch
+    {
+        VideohubUpdateKind.InputLabel => "inputLabel",
+        VideohubUpdateKind.OutputLabel => "outputLabel",
+        VideohubUpdateKind.Route => "route",
+        _ => "lock",
+    };
+
     /// <summary>Export a verified snapshot of labels and routing (1-based). Locks are not captured.</summary>
     /// <param name="file">Destination file; omit to write the snapshot JSON to stdout.</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>

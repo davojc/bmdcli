@@ -27,6 +27,7 @@ internal static class GroupHelp
         new("videohub input list", "List inputs (1-based) with their labels."),
         new("videohub output list", "List outputs (1-based) with label, routed input, and lock state."),
         new("videohub route list", "List the current routing (1-based): which input feeds each output."),
+        new("videohub watch", "Stream device changes as they happen, including changes made by other controllers. Numbering is 1-based."),
         new("videohub export", "Export a verified snapshot of labels and routing (1-based). Locks are not captured."),
         new("videohub restore", "Apply a snapshot to the device, changing only what differs. Numbering is 1-based."),
         new("videohub route set", "Route an input to an output (both 1-based, matching the device's front panel)."),

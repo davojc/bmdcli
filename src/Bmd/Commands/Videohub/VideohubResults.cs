@@ -47,3 +47,9 @@ public sealed record RestoreChangeResult(string Kind, int N, string From, string
 public sealed record VideohubRestoreResult(
     string File, string Device, int Changes, int Applied, bool DryRun, string? Backup,
     RestoreChangeResult[] Details);
+
+/// <summary>One line of `videohub watch --json` output (JSON Lines: one object per update, not
+/// a single document, since a stream has no end). Kind is "inputLabel", "outputLabel", "route",
+/// or "lock"; N is the 1-based input/output number; From/To are the previous and new label (for
+/// a route, the previous and new input's label; for a lock, the previous and new lock word).</summary>
+public sealed record VideohubUpdateResult(string Kind, int N, string From, string To);

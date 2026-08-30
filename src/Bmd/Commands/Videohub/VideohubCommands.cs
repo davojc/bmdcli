@@ -10,10 +10,14 @@ namespace Bmd.Commands.Videohub;
 /// <summary>bmd videohub — control a Blackmagic Videohub over the network.</summary>
 public class VideohubCommands
 {
-    readonly Func<ConfigStore> _loadConfig;
+    readonly DeviceSession _session;
 
     public VideohubCommands() : this(ConfigStore.LoadDefault) { }
-    public VideohubCommands(Func<ConfigStore> loadConfig) => _loadConfig = loadConfig;
+
+    public VideohubCommands(Func<ConfigStore> loadConfig)
+    {
+        _session = new DeviceSession("videohub", loadConfig);
+    }
 
     /// <summary>Show device information (model, protocol version, input/output counts).</summary>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
@@ -21,7 +25,7 @@ public class VideohubCommands
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> Info(string? host = null, int? port = null, int? timeout = null, bool json = false)
-        => WithClientAsync(host, port, timeout, client =>
+        => _session.WithClientAsync(host, port, timeout, client =>
         {
             var device = client.State.Device;
             if (json)
@@ -49,7 +53,7 @@ public class VideohubCommands
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> InputList(string? host = null, int? port = null, int? timeout = null, bool json = false)
-        => WithClientAsync(host, port, timeout, client =>
+        => _session.WithClientAsync(host, port, timeout, client =>
         {
             var device = client.State.Device;
             var entries = Enumerable.Range(1, device.VideoInputs)
@@ -67,7 +71,7 @@ public class VideohubCommands
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> OutputList(string? host = null, int? port = null, int? timeout = null, bool json = false)
-        => WithClientAsync(host, port, timeout, client =>
+        => _session.WithClientAsync(host, port, timeout, client =>
         {
             var state = client.State;
             var entries = Enumerable.Range(1, state.Device.VideoOutputs)
@@ -90,7 +94,7 @@ public class VideohubCommands
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
     public Task<int> RouteList(string? host = null, int? port = null, int? timeout = null, bool json = false)
-        => WithClientAsync(host, port, timeout, client =>
+        => _session.WithClientAsync(host, port, timeout, client =>
         {
             var state = client.State;
             var entries = Enumerable.Range(1, state.Device.VideoOutputs)
@@ -115,7 +119,7 @@ public class VideohubCommands
     public Task<int> Watch(
         string? host = null, int? port = null, int? timeout = null, bool json = false,
         CancellationToken cancellationToken = default)
-        => RunWithClientAsync(host, port, timeout, async client =>
+        => _session.RunWithClientAsync(host, port, timeout, async client =>
         {
             // The header is diagnostic chatter about the watch itself, not part of the data
             // stream — it goes to stderr so stdout stays pure for piping (`bmd videohub watch |
@@ -171,7 +175,7 @@ public class VideohubCommands
             for (var attempt = 1; attempt <= attempts; attempt++)
             {
                 VideohubSnapshot? captured = null;
-                var capture = await WithClientAsync(host, port, timeout, client =>
+                var capture = await _session.WithClientAsync(host, port, timeout, client =>
                 {
                     captured = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow);
                     return 0;
@@ -183,7 +187,7 @@ public class VideohubCommands
                 if (file is not null) File.WriteAllText(file, text);
 
                 var written = VideohubSnapshot.FromJson(file is not null ? File.ReadAllText(file) : text);
-                var verify = await WithClientAsync(host, port, timeout, client =>
+                var verify = await _session.WithClientAsync(host, port, timeout, client =>
                 {
                     differences = written.DifferencesFrom(client.State);
                     return 0;
@@ -251,7 +255,7 @@ public class VideohubCommands
 
         // --dry-run disables the backup thunk outright: nothing on the device is ever going to
         // change on this run, so there is nothing to protect against.
-        return WithDeferredBackupClientAsync(host, port, timeout, noBackup || dryRun, async (client, ensureBackup) =>
+        return _session.WithDeferredBackupClientAsync(host, port, timeout, noBackup || dryRun, async (client, ensureBackup) =>
         {
             var problems = snapshot.IncompatibilityWith(client.State.Device);
             if (problems.Count > 0)
@@ -377,7 +381,7 @@ public class VideohubCommands
         [Argument] int output, [Argument] int input,
         string? host = null, int? port = null, int? timeout = null,
         bool noBackup = false, bool json = false)
-        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
         {
             var device = client.State.Device;
             if (output < 1 || output > device.VideoOutputs)
@@ -422,7 +426,7 @@ public class VideohubCommands
         [Argument] int input, [Argument] string label,
         string? host = null, int? port = null, int? timeout = null,
         bool noBackup = false, bool json = false)
-        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
         {
             var device = client.State.Device;
             if (input < 1 || input > device.VideoInputs)
@@ -463,7 +467,7 @@ public class VideohubCommands
         [Argument] int output, [Argument] string label,
         string? host = null, int? port = null, int? timeout = null,
         bool noBackup = false, bool json = false)
-        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
         {
             var device = client.State.Device;
             if (output < 1 || output > device.VideoOutputs)
@@ -503,7 +507,7 @@ public class VideohubCommands
         [Argument] int output,
         string? host = null, int? port = null, int? timeout = null,
         bool noBackup = false, bool json = false)
-        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
         {
             var device = client.State.Device;
             if (output < 1 || output > device.VideoOutputs)
@@ -543,7 +547,7 @@ public class VideohubCommands
         [Argument] int output, bool force = false,
         string? host = null, int? port = null, int? timeout = null,
         bool noBackup = false, bool json = false)
-        => WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
         {
             var device = client.State.Device;
             if (output < 1 || output > device.VideoOutputs)
@@ -585,139 +589,12 @@ public class VideohubCommands
 
     static string LockWord(LockState lockState) => VideohubUpdate.Word(lockState);
 
-    /// <summary>Synchronous-action convenience over <see cref="RunWithClientAsync"/>.</summary>
-    Task<int> WithClientAsync(string? host, int? port, int? timeout, Func<VideohubClient, int> action)
-        => RunWithClientAsync(host, port, timeout, client => Task.FromResult(action(client)));
-
-    /// <summary>Connects, backs up the pre-change state unless disabled, then runs the action.
-    /// A failed backup aborts before the action runs.</summary>
-    Task<int> WithBackedUpClientAsync(
-        string? host, int? port, int? timeout, bool noBackup,
-        Func<VideohubClient, string?, Task<int>> action)
-        => RunWithClientAsync(host, port, timeout, async client =>
-        {
-            string? backupPath = null;
-            if (!noBackup)
-            {
-                var store = BackupStore.FromConfig(_loadConfig());
-                if (store.AutoBackupEnabled)
-                {
-                    var snapshot = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow);
-                    backupPath = store.Write(
-                        BackupStore.DeviceKey(client.Host, client.State.Device.ModelName), snapshot);
-                }
-            }
-            return await action(client, backupPath);
-        });
-
     /// <summary>Test seam: exercises the backup path with a supplied action.</summary>
     internal Task<int> BackupProbeAsync(
         string host, int port, bool noBackup, Func<VideohubClient, string?, Task<int>> action)
-        => WithBackedUpClientAsync(host, port, null, noBackup, action);
+        => _session.WithBackedUpClientAsync(host, port, null, noBackup, action);
 
-    /// <summary>Connects and hands the action a thunk that writes the pre-change backup on demand.
-    /// Call the thunk immediately before the first mutation: a command that turns out to have
-    /// nothing to do — or turns out not to apply at all — must not spend a backup slot.
-    /// The thunk is idempotent (a second call returns the same path without writing again) and
-    /// returns null when backups are disabled. Unlike <see cref="WithBackedUpClientAsync"/>, which
-    /// backs up eagerly because its five callers (route set, renames, lock, unlock) always intend
-    /// to mutate, this seam defers the decision to the caller, who alone knows whether work is
-    /// actually needed.</summary>
-    Task<int> WithDeferredBackupClientAsync(
-        string? host, int? port, int? timeout, bool noBackup,
-        Func<VideohubClient, Func<Task<string?>>, Task<int>> action)
-        => RunWithClientAsync(host, port, timeout, client =>
-        {
-            string? written = null;
-            var done = false;
-            Task<string?> Backup()
-            {
-                if (done) return Task.FromResult(written);
-                done = true;
-                if (!noBackup)
-                {
-                    var store = BackupStore.FromConfig(_loadConfig());
-                    if (store.AutoBackupEnabled)
-                    {
-                        // Captured from client.State at the moment the thunk is first called —
-                        // never mutated except by our own sends, so as long as every caller
-                        // invokes this before its first mutation, this is always the pre-change
-                        // state, regardless of how much later in the call the thunk fires.
-                        var snapshot = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow);
-                        written = store.Write(
-                            BackupStore.DeviceKey(client.Host, client.State.Device.ModelName), snapshot);
-                    }
-                }
-                return Task.FromResult(written);
-            }
-            return action(client, Backup);
-        });
-
-    /// <summary>Resolves the connection from flags then config, connects, runs the action,
-    /// and maps every expected failure to one stderr line plus an exit code.</summary>
-    Task<int> RunWithClientAsync(
-        string? host, int? port, int? timeout, Func<VideohubClient, Task<int>> action)
-        => RunCatchingAsync(async () =>
-        {
-            var store = _loadConfig();
-            var resolvedHost = host ?? GetConfig(store, "videohub.host");
-            if (resolvedHost is null)
-            {
-                Console.Error.WriteLine("error: no host configured for videohub (run: bmd config set videohub.host <addr>)");
-                return 1;
-            }
-            var resolvedPort = port ?? GetConfigInt(store, "videohub.port") ?? 9990;
-            var resolvedTimeout = timeout ?? GetConfigInt(store, "videohub.timeout") ?? 5;
-            if (resolvedTimeout <= 0)
-            {
-                Console.Error.WriteLine("error: timeout must be a positive number of seconds");
-                return 2;
-            }
-            await using var client = await VideohubClient.ConnectAsync(
-                resolvedHost, resolvedPort, TimeSpan.FromSeconds(resolvedTimeout));
-            return await action(client);
-        });
-
-    /// <summary>Runs <paramref name="body"/>, mapping every expected failure to one stderr line
-    /// plus exit code 1. The single filter shared by the real connect+action path and by the
-    /// <see cref="ThrowingProbeAsync"/> test seam.</summary>
-    static async Task<int> RunCatchingAsync(Func<Task<int>> body)
-    {
-        try
-        {
-            return await body();
-        }
-        catch (Exception ex) when (ex is SocketException or IOException or UnauthorizedAccessException
-                                       or TimeoutException or VideohubProtocolException
-                                       or VideohubCommandRejectedException
-                                       or SnapshotFormatException or ConfigValueException
-                                       or ConfigValueFormatException)
-        {
-            Console.Error.WriteLine($"error: {ex.Message}");
-            return 1;
-        }
-    }
-
-    /// <summary>Test seam: runs the shared failure filter directly against a supplied exception,
-    /// bypassing host resolution and the network connect (unlike <see cref="RunWithClientAsync"/>,
-    /// which must connect before it can invoke the caller's action).</summary>
+    /// <summary>Test seam: runs the shared failure filter directly against a supplied exception.</summary>
     internal Task<int> ThrowingProbeAsync(Exception exception)
-        => RunCatchingAsync(() => throw exception);
-
-    static string? GetConfig(ConfigStore store, string key)
-    {
-        ConfigKey.TryParse(key, out var parsed);
-        return store.GetEffective(parsed);
-    }
-
-    static int? GetConfigInt(ConfigStore store, string key)
-    {
-        var value = GetConfig(store, key);
-        if (value is null) return null;
-        return int.TryParse(value, out var parsed)
-            ? parsed
-            : throw new ConfigValueFormatException($"config {key} is not a number: '{value}'");
-    }
-
-    sealed class ConfigValueFormatException(string message) : Exception(message);
+        => DeviceSession.RunCatchingAsync(() => throw exception);
 }

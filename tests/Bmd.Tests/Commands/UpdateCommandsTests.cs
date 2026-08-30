@@ -247,6 +247,11 @@ public class UpdateCommandsTests : IDisposable
             Assert.Equal(1, exit);
             Assert.Contains("checksum", _stderr.ToString());
             Assert.Equal("old binary", File.ReadAllText(current)); // untouched
+
+            // A failed install must leave no debris beside the executable: no staging directory,
+            // no downloaded archive, no partially unpacked binary.
+            var entries = Directory.GetFileSystemEntries(directory).Select(e => Path.GetFileName(e)!).ToArray();
+            Assert.Equal([UpdateInstaller.ExecutableName], entries);
         }
         finally { Directory.Delete(directory, recursive: true); }
     }

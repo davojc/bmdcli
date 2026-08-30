@@ -48,7 +48,10 @@ public class UpdateInstallerTests : IDisposable
     public void ExtractExecutable_PullsTheBinaryOutOfAZip()
     {
         var payload = "new bmd"u8.ToArray();
-        var archive = MakeZip("bmd.exe", payload);
+        // Entry name matches UpdateInstaller.ExecutableName rather than a literal "bmd.exe" so
+        // this test passes on every host OS: on Linux/macOS ExtractExecutable looks for "bmd"
+        // inside the extracted directory regardless of the archive format under test.
+        var archive = MakeZip(UpdateInstaller.ExecutableName, payload);
         var destination = Path_("extracted-zip");
 
         var extracted = UpdateInstaller.ExtractExecutable(archive, "bmd-win-x64.zip", destination);

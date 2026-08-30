@@ -18,6 +18,12 @@ public static class UpdateInstaller
     /// be overwritten but can be renamed.</summary>
     public const string OldSuffix = ".old";
 
+    /// <summary>Shared wording for a permissions failure while writing to the install directory.
+    /// Used both by the final rename here and by the staging-directory creation in
+    /// <c>UpdateCommands</c> — one string instead of two copies that could drift apart.</summary>
+    public const string ElevatedPromptGuidance =
+        "re-run bmd update from an elevated prompt, or reinstall bmd somewhere you can write";
+
     /// <summary>Extracts <paramref name="archivePath"/> into <paramref name="destinationDirectory"/>
     /// and returns the path of the bmd executable inside it. The archive format is chosen from
     /// <paramref name="assetName"/>'s extension rather than sniffed, because the release workflow
@@ -118,8 +124,7 @@ public static class UpdateInstaller
         catch (UnauthorizedAccessException ex)
         {
             throw new UpdateException(
-                $"cannot write to {Path.GetDirectoryName(destination)}: {ex.Message} — " +
-                "re-run bmd update from an elevated prompt, or reinstall bmd somewhere you can write");
+                $"cannot write to {Path.GetDirectoryName(destination)}: {ex.Message} — {ElevatedPromptGuidance}");
         }
         catch (IOException ex)
         {

@@ -126,8 +126,7 @@ public class UpdateCommands
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             throw new UpdateException(
-                $"cannot write to {installDirectory}: {ex.Message} — " +
-                "re-run bmd update from an elevated prompt, or reinstall bmd somewhere you can write");
+                $"cannot write to {installDirectory}: {ex.Message} — {UpdateInstaller.ElevatedPromptGuidance}");
         }
 
         try

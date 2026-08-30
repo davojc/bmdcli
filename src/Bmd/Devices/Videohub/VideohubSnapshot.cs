@@ -145,6 +145,22 @@ public sealed record VideohubSnapshot(
             if (actualRoute != output.Input)
                 differences.Add($"output {output.N} route: device input {actualRoute}, snapshot input {output.Input}");
         }
+
+        // Only when THIS snapshot actually captured configuration: a snapshot with none (every
+        // Videohub, and any MultiView export taken without --include-configuration were that
+        // ever an option) has nothing to compare, and that is not a mismatch — it means this
+        // capture never looked, not that the device changed. A Videohub's state never has a
+        // CONFIGURATION block either way, so this is a no-op for every existing (non-MultiView)
+        // caller of this method.
+        if (Configuration is { } configuration)
+        {
+            var deviceConfiguration = state.ExtraBlocks.TryGetValue(MultiViewConfiguration.BlockHeader, out var lines)
+                ? MultiViewConfiguration.FromLines(lines)
+                : MultiViewConfiguration.Empty;
+            foreach (var d in ConfigurationDiff.Compute(configuration, deviceConfiguration))
+                differences.Add($"configuration '{d.Property}': device '{d.From}', snapshot '{d.To}'");
+        }
+
         return differences;
     }
 }

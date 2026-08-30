@@ -116,6 +116,20 @@ public sealed class FakeVideohub : IAsyncDisposable
         }, false);
     }
 
+    /// <summary>A MultiView whose CONFIGURATION Layout differs on every connection — used to
+    /// prove `multiview export` notices a device whose configuration changed mid-export (the
+    /// same shape as <see cref="StartChanging"/>, but for the CONFIGURATION block rather than
+    /// routing). Does not accept mutations.</summary>
+    public static FakeVideohub StartChangingConfiguration()
+    {
+        var connection = 0;
+        return new FakeVideohub(Fixtures.DumpMultiView4, () =>
+        {
+            var layout = Interlocked.Increment(ref connection) % 2 == 0 ? "2x2" : "4x1";
+            return Fixtures.DumpMultiView4.Replace("Layout: 2x2", $"Layout: {layout}");
+        }, false);
+    }
+
     public IReadOnlyList<string> OutputLabels() { lock (_gate) return _outputLabels.ToArray(); }
     public IReadOnlyList<string> InputLabels() { lock (_gate) return _inputLabels.ToArray(); }
     public int[] Routes() { lock (_gate) return _routes.ToArray(); }

@@ -632,10 +632,10 @@ public class MultiViewCommands
                 return 2;
             }
 
-            // Computed once, from connect-time state — see RestorePlan and ConfigurationDifferences.
+            // Computed once, from connect-time state — see RestorePlan and ConfigurationDiff.
             var changes = RestorePlan.Compute(snapshot, client.State);
             var configChanges = snapshot.Configuration is { } snapshotConfig
-                ? ConfigurationDifferences(snapshotConfig, ReadConfiguration(client.State)).ToArray()
+                ? ConfigurationDiff.Compute(snapshotConfig, ReadConfiguration(client.State)).ToArray()
                 : [];
             var totalChanges = changes.Count + configChanges.Length;
 
@@ -745,38 +745,4 @@ public class MultiViewCommands
         _ => $"view {change.N}: {change.From} → {change.To}",
     };
 
-    /// <summary>One CONFIGURATION property whose snapshot value differs from the device's
-    /// current one.</summary>
-    readonly record struct ConfigurationChange(string Property, string From, string To);
-
-    /// <summary>Every CONFIGURATION property the snapshot captured that differs from the
-    /// device's current value. Compared property by property — never via record equality — so
-    /// an unchanged property is never re-sent. A property the snapshot never captured (null) is
-    /// left alone entirely, regardless of what the device currently reports.</summary>
-    static IEnumerable<ConfigurationChange> ConfigurationDifferences(
-        SnapshotConfiguration snapshot, MultiViewConfiguration device)
-    {
-        if (snapshot.Layout is not null && snapshot.Layout != device.Layout)
-            yield return new ConfigurationChange("Layout", device.Layout ?? "(unset)", snapshot.Layout);
-        if (snapshot.OutputFormat is not null && snapshot.OutputFormat != device.OutputFormat)
-            yield return new ConfigurationChange("Output format", device.OutputFormat ?? "(unset)", snapshot.OutputFormat);
-        if (snapshot.SoloEnabled is not null && snapshot.SoloEnabled != device.SoloEnabled)
-            yield return new ConfigurationChange("Solo enabled", BoolText(device.SoloEnabled), BoolText(snapshot.SoloEnabled));
-        if (snapshot.WidescreenSdEnabled is not null && snapshot.WidescreenSdEnabled != device.WidescreenSdEnabled)
-            yield return new ConfigurationChange(
-                "Widescreen SD enabled", BoolText(device.WidescreenSdEnabled), BoolText(snapshot.WidescreenSdEnabled));
-        if (snapshot.DisplayBorder is not null && snapshot.DisplayBorder != device.DisplayBorder)
-            yield return new ConfigurationChange("Display border", BoolText(device.DisplayBorder), BoolText(snapshot.DisplayBorder));
-        if (snapshot.DisplayLabels is not null && snapshot.DisplayLabels != device.DisplayLabels)
-            yield return new ConfigurationChange("Display labels", BoolText(device.DisplayLabels), BoolText(snapshot.DisplayLabels));
-        if (snapshot.DisplayAudioMeters is not null && snapshot.DisplayAudioMeters != device.DisplayAudioMeters)
-            yield return new ConfigurationChange(
-                "Display audio meters", BoolText(device.DisplayAudioMeters), BoolText(snapshot.DisplayAudioMeters));
-        if (snapshot.DisplaySdiTally is not null && snapshot.DisplaySdiTally != device.DisplaySdiTally)
-            yield return new ConfigurationChange("Display SDI tally", BoolText(device.DisplaySdiTally), BoolText(snapshot.DisplaySdiTally));
-        if (snapshot.TakeMode is not null && snapshot.TakeMode != device.TakeMode)
-            yield return new ConfigurationChange("Take Mode", BoolText(device.TakeMode), BoolText(snapshot.TakeMode));
-    }
-
-    static string BoolText(bool? value) => value switch { true => "true", false => "false", null => "(unset)" };
 }

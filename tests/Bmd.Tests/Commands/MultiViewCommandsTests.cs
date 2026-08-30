@@ -360,6 +360,21 @@ public class MultiViewCommandsTests : IDisposable
     }
 
     [Fact]
+    public async Task Export_DeviceConfigurationChangesEveryAttempt_Exit1_ListsDifferences()
+    {
+        // fake serves a different Layout on each connection: labels and routing never move, so
+        // without configuration in the verify comparison this would report "verified" wrongly.
+        await using var device = FakeVideohub.StartChangingConfiguration();
+        var file = Path.Combine(_directory, "show.json");
+
+        var exit = await Commands().Export(file, "127.0.0.1", device.Port);
+
+        Assert.Equal(1, exit);
+        Assert.Contains("configuration", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+    }
+
+    [Fact]
     public async Task Restore_DryRun_ReportsTheConfigurationItWouldChangeAndChangesNothing()
     {
         await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
@@ -384,13 +399,18 @@ public class MultiViewCommandsTests : IDisposable
         var file = Path.Combine(_directory, "show.json");
         Assert.Equal(0, await Commands().Export(file, "127.0.0.1", device.Port));
         File.WriteAllText(file, File.ReadAllText(file).Replace("\"layout\": \"2x2\"", "\"layout\": \"4x1\""));
+        var before = device.ReceivedMutationCount();
 
         var exit = await Commands().Restore(file, "127.0.0.1", device.Port);
 
         Assert.Equal(0, exit);
         Assert.Equal("4x1", device.Configuration().First(p => p.Key == "Layout").Value);
-        // Unchanged properties are not re-sent.
         Assert.Equal("1080i5994", device.Configuration().First(p => p.Key == "Output format").Value);
+        // The load-bearing assertion: only Layout genuinely differs, so exactly one CONFIGURATION
+        // block is sent — not nine. A regression to whole-record diffing would re-send every
+        // property (both this device's Configuration() values above would still read correctly,
+        // since re-sending an unchanged value is a no-op on the wire) and only this count would catch it.
+        Assert.Equal(1, device.ReceivedMutationCount() - before);
     }
 
     [Fact]

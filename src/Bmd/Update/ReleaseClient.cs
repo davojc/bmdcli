@@ -5,23 +5,42 @@ namespace Bmd.Update;
 
 /// <summary>Talks to the public GitHub Releases API for <see cref="Repository"/> and downloads
 /// release assets. No authentication: the repository is public, and asking a user for a token to
-/// install an update would be absurd. Every failure mode is translated into an
-/// <see cref="UpdateException"/> whose message is ready to print — the command layer above never
-/// has to know what an <c>HttpRequestException</c> is.</summary>
+/// install an update would be absurd. Every failure mode — a non-success status, a connection
+/// that never completes, one that drops mid-transfer, a response that isn't valid JSON — is
+/// translated into an <see cref="UpdateException"/> whose message is ready to print. The command
+/// layer above never has to know what an <c>HttpRequestException</c> is, and it stays able to
+/// tell a budget timeout (translated) apart from the caller's own cancellation (left as
+/// <see cref="OperationCanceledException"/> so a Ctrl+C is reported as a cancellation, not an
+/// update failure).</summary>
 public sealed class ReleaseClient(HttpClient http, string apiBase = ReleaseClient.DefaultApiBase)
 {
     public const string Repository = "davojc/bmdcli";
     public const string DefaultApiBase = "https://api.github.com";
     public const string ReleasesPageUrl = "https://github.com/davojc/bmdcli/releases/latest";
 
+    /// <summary>Budget for a metadata/text request. Small payloads (release JSON, a checksums
+    /// file), so 30 seconds is already generous headroom for a hung connection.</summary>
+    public static readonly TimeSpan MetadataTimeout = TimeSpan.FromSeconds(30);
+
+    /// <summary>Budget for downloading a release archive. Multi-megabyte, so it needs enough
+    /// room for a slow connection to finish rather than a fast one — 10 minutes, not 30 seconds.</summary>
+    public static readonly TimeSpan DownloadTimeout = TimeSpan.FromMinutes(10);
+
     readonly string _apiBase = apiBase.TrimEnd('/');
 
     /// <summary>An HttpClient configured the way the GitHub API expects: a User-Agent (GitHub
-    /// answers 403 without one), the versioned API media type, and a timeout short enough that a
-    /// black-holed connection cannot hang the CLI indefinitely.</summary>
+    /// answers 403 without one) and the versioned API media type.</summary>
     public static HttpClient CreateHttpClient(string userAgentVersion)
     {
-        var client = new HttpClient { Timeout = TimeSpan.FromSeconds(30) };
+        var client = new HttpClient
+        {
+            // HttpClient.Timeout is an end-to-end ceiling on the whole request — including the
+            // response body — and ResponseHeadersRead does not exempt it. Left at a fixed value
+            // it would bound a multi-megabyte archive download by the same clock that suits a
+            // small JSON call. Each request instead gets its own budget via a linked
+            // CancellationTokenSource (see ExecuteAsync), sized to what that request is doing.
+            Timeout = Timeout.InfiniteTimeSpan
+        };
         client.DefaultRequestHeaders.UserAgent.Add(
             new ProductInfoHeaderValue("bmd", userAgentVersion));
         client.DefaultRequestHeaders.Accept.Add(
@@ -47,30 +66,30 @@ public sealed class ReleaseClient(HttpClient http, string apiBase = ReleaseClien
         }
     }
 
-    public async Task<string> GetTextAsync(string url, CancellationToken ct)
-    {
-        using var response = await SendAsync(url, ct);
-        return await response.Content.ReadAsStringAsync(ct);
-    }
+    public Task<string> GetTextAsync(string url, CancellationToken ct) =>
+        ExecuteAsync(url, MetadataTimeout, ct,
+            (response, linkedCt) => response.Content.ReadAsStringAsync(linkedCt));
 
-    /// <summary>Streams a URL to a file. On any failure the partial file is removed, so a caller
-    /// can never mistake a truncated download for a complete one — the checksum would catch it
-    /// anyway, but leaving debris behind after a failed update is its own small bug.</summary>
-    public async Task DownloadToFileAsync(string url, string destinationPath, CancellationToken ct)
-    {
-        try
+    /// <summary>Streams a URL to a file. On any failure — including one that happens mid-transfer,
+    /// after some bytes have already landed on disk — the partial file is removed, so a caller can
+    /// never mistake a truncated download for a complete one. The checksum would catch it anyway,
+    /// but leaving debris behind after a failed update is its own small bug.</summary>
+    public Task DownloadToFileAsync(string url, string destinationPath, CancellationToken ct) =>
+        ExecuteAsync<object?>(url, DownloadTimeout, ct, async (response, linkedCt) =>
         {
-            using var response = await SendAsync(url, ct);
-            await using var source = await response.Content.ReadAsStreamAsync(ct);
-            await using (var destination = File.Create(destinationPath))
-                await source.CopyToAsync(destination, ct);
-        }
-        catch
-        {
-            TryDelete(destinationPath);
-            throw;
-        }
-    }
+            try
+            {
+                await using var source = await response.Content.ReadAsStreamAsync(linkedCt);
+                await using (var destination = File.Create(destinationPath))
+                    await source.CopyToAsync(destination, linkedCt);
+            }
+            catch
+            {
+                TryDelete(destinationPath);
+                throw;
+            }
+            return null;
+        });
 
     static void TryDelete(string path)
     {
@@ -78,28 +97,44 @@ public sealed class ReleaseClient(HttpClient http, string apiBase = ReleaseClien
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 
-    async Task<HttpResponseMessage> SendAsync(string url, CancellationToken ct)
+    /// <summary>Runs one GET request end to end — headers, status check, and <paramref
+    /// name="readBody"/> — under a single per-operation budget, and translates every failure
+    /// along the way into an <see cref="UpdateException"/>. This is the one place that
+    /// distinguishes the two things that can cancel the linked token: the caller's own
+    /// <paramref name="ct"/> (a real cancellation, left to propagate as-is so the caller can tell
+    /// it apart from an update failure) versus the budget's own <see
+    /// cref="CancellationTokenSource.CancelAfter(TimeSpan)"/> firing (translated into a timeout
+    /// message). Before this existed, only the header phase was translated; a connection dropped
+    /// while reading the body — by far the likelier failure for a multi-megabyte archive — escaped
+    /// as a raw <see cref="HttpRequestException"/> or <see cref="IOException"/>.</summary>
+    async Task<T> ExecuteAsync<T>(string url, TimeSpan budget, CancellationToken ct,
+        Func<HttpResponseMessage, CancellationToken, Task<T>> readBody)
     {
-        HttpResponseMessage response;
+        using var budgetCts = CancellationTokenSource.CreateLinkedTokenSource(ct);
+        budgetCts.CancelAfter(budget);
+        var linkedCt = budgetCts.Token;
+
         try
         {
-            response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, ct);
+            // Checked explicitly rather than left to HttpClient/the handler to notice: a fake
+            // handler in tests (or a real one that has already started work) is not guaranteed
+            // to observe a token that was already cancelled before the call began.
+            linkedCt.ThrowIfCancellationRequested();
+            using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, linkedCt);
+            if (!response.IsSuccessStatusCode)
+                throw new UpdateException($"{url} returned HTTP {(int)response.StatusCode}");
+            return await readBody(response, linkedCt);
         }
-        catch (HttpRequestException ex)
+        catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
             throw new UpdateException($"could not reach {url}: {ex.Message}");
         }
-        catch (TaskCanceledException) when (!ct.IsCancellationRequested)
+        catch (OperationCanceledException) when (!ct.IsCancellationRequested)
         {
+            // The linked token fired but the caller's own token did not, so this was the budget
+            // expiring, not a Ctrl+C — TaskCanceledException (thrown by HttpClient) derives from
+            // OperationCanceledException, so this one filter covers both.
             throw new UpdateException($"timed out contacting {url}");
         }
-
-        if (!response.IsSuccessStatusCode)
-        {
-            var status = (int)response.StatusCode;
-            response.Dispose();
-            throw new UpdateException($"{url} returned HTTP {status}");
-        }
-        return response;
     }
 }

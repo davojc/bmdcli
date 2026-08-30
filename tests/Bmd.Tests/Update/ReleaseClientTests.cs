@@ -151,4 +151,47 @@ public class ReleaseClientTests
         Assert.NotNull(release.FindAsset("bmd-win-x64.zip"));
         Assert.Null(release.FindAsset("bmd-osx-arm64.tar.gz"));
     }
+
+    [Fact]
+    public async Task DownloadToFileAsync_ThrowsAnUpdateExceptionAndLeavesNoPartialFileWhenTheBodyDropsMidTransfer()
+    {
+        const string url = "https://downloads.example.test/bmd-win-x64.zip";
+        var handler = new FakeHttpHandler().FailingBody(
+            url, [0x50, 0x4B, 0x03, 0x04], new IOException("connection reset by peer"));
+        var destination = Path.Combine(Path.GetTempPath(), $"bmd-dl-{Guid.NewGuid():N}.zip");
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<UpdateException>(
+                () => ClientFor(handler).DownloadToFileAsync(url, destination, CancellationToken.None));
+
+            Assert.DoesNotContain("Exception", ex.Message);
+            Assert.False(File.Exists(destination));
+        }
+        finally { if (File.Exists(destination)) File.Delete(destination); }
+    }
+
+    [Fact]
+    public async Task GetTextAsync_ThrowsAnUpdateExceptionWhenTheBodyDropsMidTransfer()
+    {
+        const string url = "https://downloads.example.test/checksums.txt";
+        var handler = new FakeHttpHandler().FailingBody(
+            url, "abc  "u8.ToArray(), new IOException("connection reset by peer"));
+
+        var ex = await Assert.ThrowsAsync<UpdateException>(
+            () => ClientFor(handler).GetTextAsync(url, CancellationToken.None));
+
+        Assert.DoesNotContain("Exception", ex.Message);
+    }
+
+    [Fact]
+    public async Task GetLatestReleaseAsync_PropagatesCallerCancellationRatherThanReportingATimeout()
+    {
+        var handler = new FakeHttpHandler().Text(LatestUrl, LatestJson);
+        using var alreadyCancelled = new CancellationTokenSource();
+        await alreadyCancelled.CancelAsync();
+
+        await Assert.ThrowsAsync<OperationCanceledException>(
+            () => ClientFor(handler).GetLatestReleaseAsync(alreadyCancelled.Token));
+    }
 }

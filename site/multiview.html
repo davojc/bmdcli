@@ -90,8 +90,10 @@ Output format:  1080i5994</code></pre>
 6     Audio       1   Camera 1      unlocked</code></pre>
     <p>
       <strong>On a MultiView 4, that last part is worth stating plainly: views 5 and 6 are not
-      windows at all.</strong> They are the Solo output (what's shown full-screen when solo mode is
-      on — see <a href="#solo">Solo</a> below) and the Audio output. Only views 1–4 are the actual
+      windows at all.</strong> They are <code>Solo Input</code> (what's shown full-screen when solo
+      mode is on — see <a href="#solo">Solo</a> below) and <code>Audio Input</code>, named here the
+      way the device labels them so this page matches what
+      <code>view list</code> prints. Only views 1–4 are the actual
       quad-split windows on the multiview display. bmd numbers all six the same way the device does,
       so <code>view list</code> shows every one of them, but a script that assumes "view" always
       means "window" will be surprised on this model.
@@ -136,6 +138,27 @@ bmd multiview format 1080i5994</code></pre>
     </p>
     <pre class="cmd cmd-out"><code>error: device rejected CONFIGURATION (Layout: 9x9)</code></pre>
     <p>Trial and error against the actual unit — or its manual, if Blackmagic's documents the block for your model — is the only reliable way to know what it accepts.</p>
+    <p>
+      Which is why there is a way to ask your own device what it reports. <code>config</code> prints
+      the whole block exactly as the device sent it, including properties bmd has never heard of:
+    </p>
+    <pre class="cmd"><code>bmd multiview config</code></pre>
+    <pre class="cmd cmd-out"><code>SETTING               VALUE
+Layout                2x2
+Output format         1080i5994
+Solo enabled          false
+Widescreen SD enabled true
+Display border        true
+Display labels        true
+Display audio meters  false
+Display SDI tally     false
+Take Mode             true</code></pre>
+    <p>
+      On a MultiView 16, or a firmware newer than this page, that list may well be longer. bmd shows
+      whatever arrives rather than only the settings it has commands for, so this is the honest
+      starting point for finding out what your unit supports. Add <code>--json</code> to get the
+      same thing as name/value pairs.
+    </p>
   </section>
 
   <section id="overlays-and-behaviour">
@@ -158,14 +181,17 @@ bmd multiview widescreen-sd on</code></pre>
 
   <section id="solo">
     <h2>6. Solo</h2>
-    <p>Solo shows one source full-screen on the Solo output instead of the usual quad-split view:</p>
+    <p>
+      Solo shows one source full-screen, fed from the view the device labels
+      <code>Solo Input</code>, instead of the usual quad-split:
+    </p>
     <pre class="cmd"><code>bmd multiview solo 3
 bmd multiview solo off</code></pre>
     <p>
-      Giving a source number both points the Solo output at that source and enables solo mode;
-      <code>off</code> leaves solo mode and does not otherwise change any routing. bmd routes the
-      source to the Solo view before enabling solo, so by the time solo mode is on, the right
-      picture is already showing.
+      Giving a source number both points <code>Solo Input</code> at that source and enables solo
+      mode; <code>off</code> leaves solo mode and does not otherwise change any routing. bmd routes
+      the source before enabling solo, so by the time solo mode is on, the right picture is already
+      showing rather than a moment of whatever was there before.
     </p>
   </section>
 

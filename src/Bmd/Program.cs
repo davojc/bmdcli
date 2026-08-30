@@ -1,4 +1,5 @@
 using Bmd.Commands;
+using Bmd.Commands.MultiView;
 using Bmd.Commands.Videohub;
 using Bmd.Update;
 using ConsoleAppFramework;
@@ -30,6 +31,12 @@ app.Add("videohub input rename", videohub.InputRename);
 app.Add("videohub output rename", videohub.OutputRename);
 app.Add("videohub output lock", videohub.OutputLock);
 app.Add("videohub output unlock", videohub.OutputUnlock);
+
+var multiview = new MultiViewCommands();
+app.Add("multiview info", multiview.Info);
+app.Add("multiview input list", multiview.InputList);
+app.Add("multiview view list", multiview.ViewList);
+app.Add("multiview config", multiview.Config);
 
 var discover = new DiscoverCommands();
 app.Add("discover", discover.Discover);

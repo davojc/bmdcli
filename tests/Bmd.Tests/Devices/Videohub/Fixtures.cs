@@ -41,4 +41,35 @@ public static class Fixtures
         "\n" +
         "END PRELUDE:\n" +
         "\n";
+
+    /// <summary>A real Blackmagic MultiView 4 dump (firmware 2.2.5), captured read-only from
+    /// hardware. Six "outputs": four multiview windows plus Solo Input and Audio Input. Carries
+    /// the CONFIGURATION block, which no Videohub sends.</summary>
+    public const string DumpMultiView4 =
+        "PROTOCOL PREAMBLE:\nVersion: 2.8\n\n" +
+        "VIDEOHUB DEVICE:\n" +
+        "Device present: true\n" +
+        "Model name: Blackmagic MultiView 4\n" +
+        "Friendly name: AV Multiview\n" +
+        "Unique ID: 7C2E0D11C751\n" +
+        "Video inputs: 4\n" +
+        "Video processing units: 0\n" +
+        "Video outputs: 6\n" +
+        "Video monitoring outputs: 0\n" +
+        "Serial ports: 0\n\n" +
+        "INPUT LABELS:\n0 Stream\n1 Screens\n2 Presenter\n3 Confidence\n\n" +
+        "OUTPUT LABELS:\n0 View 1\n1 View 2\n2 View 3\n3 View 4\n4 Solo Input\n5 Audio Input\n\n" +
+        "VIDEO OUTPUT LOCKS:\n0 U\n1 U\n2 U\n3 U\n4 U\n5 U\n\n" +
+        "VIDEO OUTPUT ROUTING:\n0 0\n1 1\n2 2\n3 3\n4 2\n5 0\n\n" +
+        "CONFIGURATION:\n" +
+        "Layout: 2x2\n" +
+        "Output format: 1080i5994\n" +
+        "Solo enabled: false\n" +
+        "Widescreen SD enabled: true\n" +
+        "Display border: true\n" +
+        "Display labels: true\n" +
+        "Display audio meters: false\n" +
+        "Display SDI tally: false\n" +
+        "Take Mode: true\n\n" +
+        "END PRELUDE:\n\n";
 }

@@ -38,9 +38,13 @@ internal static class GroupHelp
         new("videohub output rename", "Rename an output (1-based)."),
         new("videohub output lock", "Take the lock on an output (1-based), preventing other controllers from routing it or taking it over without --force."),
         new("videohub output unlock", "Release the lock on an output (1-based). Without --force, unlocking an output locked by another controller is left to the device to accept or refuse."),
+        new("multiview info", "Show device information (model, protocol version, source and view counts, layout)."),
+        new("multiview input list", "List sources (1-based) with their labels."),
+        new("multiview view list", "List views (1-based) with label, source, and lock state."),
+        new("multiview config", "Print the device's CONFIGURATION block exactly as reported."),
     ];
 
-    static readonly string[] Groups = ["config", "videohub"];
+    static readonly string[] Groups = ["config", "videohub", "multiview"];
 
     /// <summary>Attempts to handle `args` as `&lt;group&gt;` or `&lt;group&gt; --help`/`-h` for a
     /// known command group. Returns false (and writes nothing) for anything else — an exact

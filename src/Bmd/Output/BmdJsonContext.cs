@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Bmd.Commands;
+using Bmd.Commands.MultiView;
 using Bmd.Commands.Videohub;
 using Bmd.Config;
 
@@ -23,6 +24,10 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(VideohubLockResult))]
 [JsonSerializable(typeof(VideohubRestoreResult))]
 [JsonSerializable(typeof(VideohubUpdateResult))]
+[JsonSerializable(typeof(MultiViewInfoResult))]
+[JsonSerializable(typeof(MultiViewInputEntry[]))]
+[JsonSerializable(typeof(MultiViewViewEntry[]))]
+[JsonSerializable(typeof(MultiViewConfigEntry[]))]
 [JsonSerializable(typeof(VersionResult))]
 [JsonSerializable(typeof(UpdateCheckResult))]
 [JsonSerializable(typeof(UpdateResult))]

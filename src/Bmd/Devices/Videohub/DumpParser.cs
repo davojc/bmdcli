@@ -5,6 +5,19 @@ public static class DumpParser
     public static readonly IReadOnlyList<string> RequiredHeaders =
         ["VIDEOHUB DEVICE", "INPUT LABELS", "OUTPUT LABELS", "VIDEO OUTPUT ROUTING", "VIDEO OUTPUT LOCKS"];
 
+    /// <summary>Headers the parser turns into typed state, plus the protocol's own control and
+    /// framing blocks. Anything outside this set is device-specific and is kept verbatim in
+    /// <see cref="VideohubState.ExtraBlocks"/> instead of being discarded.</summary>
+    public static readonly IReadOnlyList<string> RecognisedHeaders =
+        [.. RequiredHeaders, "PROTOCOL PREAMBLE", "END PRELUDE", "ACK", "NAK"];
+
+    static bool IsRecognised(string header)
+    {
+        foreach (var known in RecognisedHeaders)
+            if (string.Equals(known, header, StringComparison.Ordinal)) return true;
+        return false;
+    }
+
     public static VideohubState Parse(IReadOnlyList<ProtocolBlock> blocks)
     {
         var byHeader = new Dictionary<string, ProtocolBlock>(StringComparer.Ordinal);
@@ -29,7 +42,10 @@ public static class DumpParser
         var locks = new LockState[device.VideoOutputs];
         foreach (var (index, value) in ParsePairs(byHeader["VIDEO OUTPUT LOCKS"], device.VideoOutputs))
             locks[index] = ParseLock(value);
-        return new VideohubState(device, inputLabels, outputLabels, routes, locks);
+        var extras = new Dictionary<string, IReadOnlyList<string>>(StringComparer.Ordinal);
+        foreach (var block in blocks)
+            if (!IsRecognised(block.Header)) extras.TryAdd(block.Header, block.Lines);
+        return new VideohubState(device, inputLabels, outputLabels, routes, locks, extras);
     }
 
     /// <summary>Returns a new state with the update block's entries applied.
@@ -71,7 +87,11 @@ public static class DumpParser
                 return state.WithLocks(locks);
             }
             default:
-                return state;
+                // A block this parser has no typed model for. Keep it so a device-specific layer
+                // can read it; control blocks are the client's business, not device state.
+                return IsRecognised(block.Header)
+                    ? state
+                    : state.WithExtraBlock(block.Header, block.Lines);
         }
     }
 

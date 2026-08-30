@@ -28,18 +28,26 @@ public sealed record DiscoveredDevice(
 public static class DeviceClasses
 {
     /// <summary>mDNS TXT <c>class=</c> values mapped to the bmd device group that handles them.
-    /// <para><c>Videohub</c> and <c>MultiView</c> are <b>confirmed against real hardware</b>
-    /// (a Smart Videohub 40x40 and a MultiView 4). The remaining Videohub spellings are seed
-    /// values based on observation, not a specification — Blackmagic does not publish this set.
-    /// <c>AtemSwitcher</c> was also observed on the network but is deliberately absent here: bmd
-    /// cannot control an ATEM, and mapping it would offer to configure a device it can't drive.
-    /// Run <c>bmd discover --all</c> against real devices to refine the table.</para></summary>
+    /// <para><c>Videohub</c>, <c>MultiView</c> and <c>AtemSwitcher</c> are <b>confirmed against
+    /// real hardware</b> (a Smart Videohub 40x40, a MultiView 4, and two ATEMs — a Television
+    /// Studio HD III and a 1 M/E Production Studio 4K, both advertising on UDP 9910). The
+    /// remaining Videohub spellings are seed values based on observation, not a specification —
+    /// Blackmagic does not publish this set.</para>
+    /// <para><c>AtemSwitcher</c> was deliberately absent here until bmd could drive an ATEM,
+    /// because mapping it would have offered to configure a device it could not talk to. That
+    /// reasoning expired when the `atem` group landed.</para>
+    /// <para>The HyperDeck and WebPresenter family are still unmapped, and cannot be added the
+    /// same way: they advertise on port 9977 with <b>no <c>class=</c> at all</b>, identifying
+    /// themselves by a <c>product id=</c> (BE73, BE74, BE8B, BE8C observed) instead. Supporting
+    /// them needs a second identification path, not another row in this table.</para>
+    /// Run <c>bmd discover --all</c> against real devices to refine this.</summary>
     static readonly KeyValuePair<string, string>[] ClassMap =
     [
         new("Videohub", "videohub"),
         new("SmartVideohub", "videohub"),
         new("VideoHub", "videohub"),
         new("MultiView", "multiview"),
+        new("AtemSwitcher", "atem"),
     ];
 
     /// <summary>Case-insensitive lookup of the bmd device group for a device class.

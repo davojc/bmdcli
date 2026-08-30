@@ -1,4 +1,5 @@
 using Bmd.Commands;
+using Bmd.Commands.Atem;
 using Bmd.Commands.MultiView;
 using Bmd.Commands.Videohub;
 using Bmd.Update;
@@ -57,6 +58,16 @@ app.Add("discover", discover.Discover);
 
 var version = new VersionCommands();
 app.Add("version", version.Version);
+
+var atem = new AtemCommands();
+app.Add("atem info", atem.Info);
+app.Add("atem input list", atem.InputList);
+app.Add("atem input rename", atem.InputRename);
+app.Add("atem aux list", atem.AuxList);
+app.Add("atem aux set", atem.AuxSet);
+app.Add("atem status", atem.Status);
+app.Add("atem program set", atem.ProgramSet);
+app.Add("atem preview set", atem.PreviewSet);
 
 var update = new UpdateCommands();
 app.Add("update", update.Update);

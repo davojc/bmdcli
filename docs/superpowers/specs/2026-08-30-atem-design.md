@@ -1,6 +1,10 @@
 # ATEM switcher support — design
 
-**Status:** approved in outline; scope is milestone 11 only (transport + read path).
+**Status:** implemented, with a scope change. Milestone 11 was designed read-only; the user
+asked for the write path — input labels and aux routing above all, with switching explicitly
+secondary — so the read path and those writes shipped together. The read-only reasoning below is
+kept as written, because it explains what the writes are trading against rather than being
+superseded by them. See "Scope: milestone 11 is read-only" and its amendment.
 **Relates to:** `docs/superpowers/specs/2026-08-29-bmd-cli-design.md` (the main design; ATEM was
 listed there as a future device). This document covers what that one deferred.
 
@@ -67,6 +71,13 @@ hardware matches PyATEMMax's independently-derived constants:
 That agreement is what justifies the input-listing decision below: the split between real inputs and
 internal sources is a genuine structural boundary, not an inference.
 
+**Three things the capture settled that no document did.** Block bytes 2-3 are a constant
+`0x0014`, not reserved-zero — validating them as zero rejects every real packet. Names must be
+read to the first NUL and never to the field width, because the device does not zero its send
+buffer: the padding after input 2's (empty) name contains the bytes `MPrp`, a real command name
+left over from an earlier block. And `AuxS` reads `00 56 00 06` — aux 0, source 6 — where that
+`0x56` is the same uninitialised garbage sitting between the index and the source id, not a field.
+
 **One documented layout is wrong for this firmware.** `PrgI` matched exactly — payload
 `00 00 00 06`, meaning M/E 0, source 6. But `PrvI` is documented as a 4-byte payload and this
 switcher sends **8**: `00 01 00 01 00 01 00 2c`. The leading four parse correctly (M/E 0, source 1);
@@ -82,6 +93,16 @@ packet — and would have passed its tests, because a fake built from the same d
 have made the same mistake.
 
 ## Scope: milestone 11 is read-only
+
+> **Amended after implementation.** The user's priority was the opposite of this section's
+> ordering: naming inputs and routing auxes first, switching "secondary". Writes therefore shipped
+> in milestone 11. What survives from the reasoning below is the *risk*, not the sequencing — and
+> it is answered by a mechanism rather than by deferral. Because the capture contains nothing a
+> client sent, no command layout can be verified from it; so `AtemClient.SendCommandAsync` sends a
+> command and then **waits for the device to push the corresponding state block back**, treating
+> silence as failure. A wrong layout surfaces as `did not report the change`, never as a silent
+> no-op reported as success. `bmd atem program set` is the one command that cuts on air, and the
+> site guide says so in those words.
 
 No command that changes the switcher. Not program selection, not cut, not auto.
 
@@ -184,8 +205,10 @@ be labelled as such, so nobody later mistakes it for observed behaviour.
 
 ## Milestones
 
-- **11 — transport and read path.** Header codec, block framing, session, state dump, retained
-  unknown blocks; `atem info` / `input list` / `status`.
+- **11 — transport, read path, and the write path the user asked for.** ✅ Header codec, block
+  framing, session, state dump, retained unknown blocks; `atem info` / `input list [--all]` /
+  `status` / `aux list`; `input rename`, `aux set`, `program set`, `preview set`, each backed up
+  first and each verified against the device's own state push.
 
   Discovery needs a deliberate reversal here. `DeviceClasses` currently leaves `AtemSwitcher`
   unmapped *on purpose*, with a comment explaining that mapping it "would offer to configure a
@@ -193,6 +216,7 @@ be labelled as such, so nobody later mistakes it for observed behaviour.
   (`DiscoveredDeviceTests.cs:137` and `:164`). Once bmd can read an ATEM that reasoning expires, so
   milestone 11 maps the class and inverts both tests. Whoever does it should understand they are
   reversing a considered decision rather than fixing an oversight.
-- **12 — switching.** `CPgI`, `CPvI`, `DCut`, `DAut`, once the transport is trusted.
+- **12 — the rest.** `atem export` / `restore` / `watch` (the snapshot type and backup path
+  already exist, so export is mostly plumbing), then `DCut` / `DAut` and transitions.
 - Later, if wanted: transitions and keyers, audio, media players, camera control. Each is its own
   milestone; "ATEM support" is a programme, not a feature.

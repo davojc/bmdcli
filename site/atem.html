@@ -1,0 +1,273 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bmd — ATEM guide</title>
+<meta name="description" content="A practical guide to an ATEM switcher with bmd: connecting, naming inputs, routing auxiliaries, program and preview, backups, and exactly which parts are verified against real hardware.">
+<meta name="theme-color" content="#0c0d10">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTQnIGZpbGw9JyNmMjU0MmQnLz48dGV4dCB4PSczMicgeT0nNDUnIGZvbnQtZmFtaWx5PSdtb25vc3BhY2UnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9JyMwYzBkMTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnPiZndDtfPC90ZXh0Pjwvc3ZnPg==">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <header class="guide-header">
+    <p class="back-link"><a href="index.html">&larr; bmd</a></p>
+    <h1>The ATEM guide</h1>
+    <p class="tagline">Naming inputs and routing auxiliaries on an ATEM switcher, from the command line.</p>
+  </header>
+
+  <nav class="page-nav" aria-label="Sections">
+    <ol>
+      <li><a href="#connecting">1. Connecting</a></li>
+      <li><a href="#sources">2. Sources and ids</a></li>
+      <li><a href="#naming">3. Naming inputs</a></li>
+      <li><a href="#auxes">4. Auxiliary outputs</a></li>
+      <li><a href="#switching">5. Program and preview</a></li>
+      <li><a href="#backups">6. Backups</a></li>
+      <li><a href="#scripting">7. Scripting</a></li>
+      <li><a href="#known-limitations">8. What is and isn't verified</a></li>
+    </ol>
+  </nav>
+
+  <section id="connecting">
+    <h2>1. Connecting</h2>
+    <p>
+      An ATEM does not speak the protocol the Videohub and MultiView share. It uses a binary
+      protocol over <strong>UDP port 9910</strong>, with a session handshake, sequence numbers and
+      acknowledgements. None of that is visible in use, but it does mean the port is different and
+      the address lives under its own config prefix.
+    </p>
+    <pre class="cmd"><code>bmd discover --add</code></pre>
+    <p>
+      An ATEM shows up with type <code>atem</code>, and picking it writes <code>atem.host</code>
+      and its port. If you already know the address:
+    </p>
+    <pre class="cmd"><code>bmd config set atem.host 192.168.1.30</code></pre>
+    <p>
+      Every <code>bmd atem</code> command also takes <code>--host</code>, <code>--port</code> and
+      <code>--timeout</code> for one-off use. If you point it at the wrong device, it says so
+      plainly rather than hanging — a Videohub or MultiView has nothing listening on 9910 at all:
+    </p>
+    <pre class="cmd cmd-out"><code>error: nothing is listening on 192.168.1.60:9910 (an ATEM listens on UDP 9910)</code></pre>
+  </section>
+
+  <section id="sources">
+    <h2>2. Sources and ids</h2>
+    <p>
+      Start by seeing what the switcher has:
+    </p>
+    <pre class="cmd"><code>bmd atem info</code></pre>
+    <pre class="cmd cmd-out"><code>Model:            ATEM Television Studio HD
+Protocol:         2.30
+Mix effects:      1
+Sources:          24
+Downstream keyers:  2
+Auxiliaries:      1
+Media players:    2
+Video mode:       11 (raw device value)</code></pre>
+    <p>
+      Twenty-four sources, but only eight of them are things you can plug a cable into. The rest
+      are internal: colour bars, colour generators, media players, key and mask signals, clean
+      feeds, the auxiliary, and the program and preview outputs. <code>input list</code> shows the
+      real inputs, which is almost always what you want:
+    </p>
+    <pre class="cmd"><code>bmd atem input list</code></pre>
+    <pre class="cmd cmd-out"><code>ID  NAME        SHORT
+1   Presenter   PRES
+2
+3
+4   Stage       STG
+5   Media       MEDI
+6   Lyrics      LYRC
+7   Confidence  CONF
+8   Stream      STRM</code></pre>
+    <p>
+      Blank rows are not a bug — those inputs genuinely have no name set on the switcher. That is
+      exactly what <a href="#naming">the next section</a> fixes.
+    </p>
+    <p>
+      Add <code>--all</code> to see everything, which is how you find the id of an internal source
+      to route to an aux:
+    </p>
+    <pre class="cmd"><code>bmd atem input list --all</code></pre>
+    <pre class="cmd cmd-out"><code>ID     NAME              SHORT
+0      Black             BLK
+1      Presenter         PRES
+...
+1000   Color Bars        BARS
+3010   Media Player 1    MP1
+8001   Auxiliary 1       AUX1
+10010  Live On Screens   PGM
+10011  Not Live          PVW</code></pre>
+    <p>
+      <strong>Those ids are the switcher's own, and bmd does not renumber them.</strong> Everywhere
+      else in bmd, numbering is 1-based to match a device's front panel. An ATEM's source ids are
+      not a dense range — inputs are 1&ndash;8, but colour bars are 1000 and media player 1 is 3010
+      — so renumbering them would invent a scheme that the switcher's own software control, its
+      front panel, and every other controller disagree with. Auxiliary outputs <em>are</em> counted
+      from 1, because there the device labels them that way itself.
+    </p>
+  </section>
+
+  <section id="naming">
+    <h2>3. Naming inputs</h2>
+    <p>
+      A name set here is set on the switcher itself, so it shows up in its multiviewer, in ATEM
+      Software Control, and in every other controller on the network — not just in bmd.
+    </p>
+    <pre class="cmd"><code>bmd atem input rename 2 "Camera Two"</code></pre>
+    <pre class="cmd cmd-out"><code>Renamed source 2 to 'Camera Two' (CAM2)
+Backup: /home/you/.local/state/bmd/backups/192-168-1-30-atem-television-studio-hd/20260831-142530.json</code></pre>
+    <p>
+      Each input carries two names: a long one of up to 20 characters, and a short one of up to
+      four. The short name is what the switcher prints on multiviewer labels, so it is the one
+      people actually read during a show. Set them together or separately:
+    </p>
+    <pre class="cmd"><code>bmd atem input rename 2 "Camera Two" --short CAM2
+bmd atem input rename 2 --short CAM2</code></pre>
+    <p>
+      Naming one leaves the other alone, so tightening a short name never blanks the long one. A
+      rename that would change nothing is reported and skipped rather than sent — it costs a write
+      to a production switcher and buys nothing:
+    </p>
+    <pre class="cmd cmd-out"><code>No change: source 2 is already named that.</code></pre>
+  </section>
+
+  <section id="auxes">
+    <h2>4. Auxiliary outputs</h2>
+    <p>
+      An auxiliary is an output that can carry any source independently of what is on air, which
+      makes it the usual feed for a stage monitor, a recorder, or a presenter's confidence screen.
+    </p>
+    <pre class="cmd"><code>bmd atem aux list</code></pre>
+    <pre class="cmd cmd-out"><code>AUX  SOURCE  NAME
+1    6       Lyrics</code></pre>
+    <p>
+      Point one at a different source by id, using <code>input list --all</code> to find the id:
+    </p>
+    <pre class="cmd"><code>bmd atem aux set 1 4</code></pre>
+    <pre class="cmd cmd-out"><code>Aux 1 now shows 4 (Stage)
+Backup: /home/you/.local/state/bmd/backups/192-168-1-30-atem-television-studio-hd/20260831-142612.json</code></pre>
+    <p>
+      Auxes are numbered from 1, matching the switcher's own labels. An aux the switcher does not
+      have is refused before anything is sent:
+    </p>
+    <pre class="cmd cmd-out"><code>error: aux must be between 1 and 1, not 2</code></pre>
+  </section>
+
+  <section id="switching">
+    <h2>5. Program and preview</h2>
+    <p>
+      bmd can also cut. This is deliberately the least emphasised part of the ATEM support: a
+      switcher is usually the most production-critical device in a rack, and a command line is not
+      where most people want to be during a show. It exists for automation — a scheduled cut to
+      a holding slide, a scripted start-of-stream state.
+    </p>
+    <pre class="cmd"><code>bmd atem status</code></pre>
+    <pre class="cmd cmd-out"><code>Program:  6      Lyrics
+Preview:  1      Presenter</code></pre>
+    <p>
+      <code>preview set</code> changes nothing on air. <code>program set</code> is a hard cut, on
+      air, immediately:
+    </p>
+    <pre class="cmd"><code>bmd atem preview set 4
+bmd atem program set 4</code></pre>
+    <p>
+      Both take <code>--mix-effect</code> for a switcher with more than one; it defaults to 1.
+      There is no transition or auto-mix command in this release.
+    </p>
+  </section>
+
+  <section id="backups">
+    <h2>6. Backups</h2>
+    <p>
+      Every command that changes the switcher writes a backup of the pre-change state first, and
+      tells you where it went. The snapshot holds what bmd can change: every source's names, the
+      aux routing, and the program and preview buses.
+    </p>
+    <p>
+      It is deliberately <em>not</em> a full device backup. A switcher's transitions, keyers, media
+      pool and audio mixer are outside what these commands touch, and a snapshot implying otherwise
+      would be a promise bmd could not keep. For a complete backup, use ATEM Software Control's own
+      save-to-file.
+    </p>
+    <p>
+      Backups honour <code>backup.dir</code>, <code>backup.keep</code> and <code>backup.auto</code>
+      exactly as the other device groups do, and <code>--no-backup</code> skips one for a single
+      command.
+    </p>
+  </section>
+
+  <section id="scripting">
+    <h2>7. Scripting</h2>
+    <p>
+      Every command takes <code>--json</code> and emits exactly one document on stdout. Exit codes
+      are the same contract as everywhere in bmd: 0 success, 1 operation failure, 2 usage error.
+      See the <a href="videohub.html#scripting">Videohub guide's scripting section</a> for the full
+      contract.
+    </p>
+    <pre class="cmd"><code>bmd atem input list --json | jq -r '.[] | select(.name == "") | .id'</code></pre>
+    <p>
+      That prints the id of every input still waiting for a name — a one-liner worth running on a
+      switcher nobody has labelled yet.
+    </p>
+  </section>
+
+  <section id="known-limitations">
+    <h2>8. What is and isn't verified</h2>
+    <p>
+      Blackmagic does not publish the ATEM network protocol. There is no equivalent of the Videohub
+      Ethernet Protocol document, so everything here was worked out by capturing what a real
+      switcher sends and cross-checking it against independent community reverse-engineering. That
+      makes some of this better evidenced than others, and it is worth being straight about which
+      is which.
+    </p>
+    <ul class="limitations">
+      <li>
+        <strong>Reading is built on real captured bytes.</strong> Every layout used to read a
+        switcher's model, sources, names, aux routing and program/preview state was read off a
+        capture from a real ATEM Television Studio HD III, and is tested against those exact bytes.
+      </li>
+      <li>
+        <strong>Writing is the less certain half.</strong> A capture only contains what the
+        switcher <em>sent</em>; a client's commands never appear in it. The command layouts are
+        derived from the shape of the state each one changes, plus community documentation. To
+        contain that, <strong>bmd never reports a change it did not see the switcher confirm</strong>:
+        it sends the command, waits for the device to report the new state back, and fails with a
+        clear error if that never arrives. A wrong layout produces a visible timeout, not a silent
+        no-op reported as success.
+      </li>
+      <li>
+        <strong>Findings come from one switcher model.</strong> Model variation between ATEMs is
+        much larger than between Videohubs. bmd reads the switcher's own reported topology rather
+        than assuming any of it, but a model with different capabilities may still behave in ways
+        this has not seen.
+      </li>
+      <li>
+        <strong>Video mode is shown as a raw number.</strong> The mode-number-to-format table is not
+        published, and printing a confidently wrong <code>1080i5994</code> would be worse than
+        printing the number the device reported.
+      </li>
+      <li>
+        <strong>There is no restore, export or watch for ATEM yet</strong>, and no transitions,
+        keyers, media player or audio control. Backups are written but must currently be read back
+        by hand.
+      </li>
+    </ul>
+  </section>
+
+  <footer>
+    <p>
+      <a href="index.html">&larr; Back to bmd</a>
+      · <a href="videohub.html">Videohub guide</a>
+      · <a href="multiview.html">MultiView guide</a>
+      · <a href="install.html">Install &amp; verify</a>
+      · <a href="https://github.com/davojc/bmdcli">Source on GitHub</a>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

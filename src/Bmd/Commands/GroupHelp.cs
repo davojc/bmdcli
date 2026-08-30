@@ -61,6 +61,14 @@ internal static class GroupHelp
         new("multiview watch", "Stream device changes as they happen."),
         new("multiview export", "Export a verified snapshot of sources, views and configuration."),
         new("multiview restore", "Apply a snapshot, changing only what differs."),
+        new("atem info", "Show switcher information (model, protocol version, topology)."),
+        new("atem input list", "List inputs with their names and source ids. --all adds internal sources."),
+        new("atem status", "Show what is on the program and preview buses."),
+        new("atem aux list", "List auxiliary outputs (1-based) and the source feeding each."),
+        new("atem input rename", "Rename an input on the switcher itself."),
+        new("atem aux set", "Route a source to an auxiliary output."),
+        new("atem program set", "Put a source on the program bus. Cuts on air immediately."),
+        new("atem preview set", "Put a source on the preview bus."),
     ];
 
     /// <summary>The command groups, each with the one-line description it gets in the root
@@ -69,6 +77,7 @@ internal static class GroupHelp
     [
         new("videohub", "Route and label a Videohub."),
         new("multiview", "Drive a MultiView's views, layout and overlays."),
+        new("atem", "Name inputs and route auxes on an ATEM switcher."),
         new("config", "Read and write bmd's own settings."),
     ];
 

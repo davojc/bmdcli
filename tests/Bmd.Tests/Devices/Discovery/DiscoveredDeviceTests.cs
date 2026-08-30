@@ -40,8 +40,10 @@ public class DiscoveredDeviceTests
     [Fact]
     public void FromRecords_UnknownClass_HasNullDeviceType_ButIsStillReturned()
     {
-        var device = Assert.Single(DeviceAssembler.FromRecords(Records(deviceClass: "AtemSwitcher")));
-        Assert.Equal("AtemSwitcher", device.DeviceClass);
+        // HyperDeck is genuinely unmapped: it advertises no class= at all, so discovery finds it
+        // and declines to guess. AtemSwitcher used to stand here, before bmd could drive one.
+        var device = Assert.Single(DeviceAssembler.FromRecords(Records(deviceClass: "HyperDeck")));
+        Assert.Equal("HyperDeck", device.DeviceClass);
         Assert.Null(device.DeviceType);
     }
 
@@ -134,7 +136,6 @@ public class DiscoveredDeviceTests
     [InlineData("Videohub", "videohub")]
     [InlineData("videohub", "videohub")]
     [InlineData("SmartVideohub", "videohub")]
-    [InlineData("AtemSwitcher", null)]
     [InlineData("", null)]
     public void DeviceTypeFor_MapsKnownClassesCaseInsensitively(string deviceClass, string? expected)
     {
@@ -157,11 +158,23 @@ public class DiscoveredDeviceTests
         Assert.Equal("videohub", DeviceClasses.DeviceTypeFor("Videohub"));
     }
 
-    [Fact]
-    public void DeviceTypeFor_DoesNotGuessAtAtem()
+    [Theory]
+    [InlineData("AtemSwitcher", "atem")]
+    [InlineData("atemswitcher", "atem")]
+    [InlineData("ATEMSWITCHER", "atem")]
+    public void DeviceTypeFor_RecognisesTheAtemClass(string advertised, string expected)
     {
-        // Observed on the network but unsupported; discovery must not offer to configure it.
-        Assert.Null(DeviceClasses.DeviceTypeFor("AtemSwitcher"));
+        // Reverses a considered decision rather than fixing an oversight: this used to assert
+        // null, because offering to configure a device bmd could not drive would have been
+        // worse than not finding it. Confirmed against two real ATEMs of different models.
+        Assert.Equal(expected, DeviceClasses.DeviceTypeFor(advertised));
+    }
+
+    [Fact]
+    public void DeviceTypeFor_StillDoesNotGuessAtAnUnmappedClass()
+    {
+        // A HyperDeck advertises no class= at all; identifying it needs a different path.
+        Assert.Null(DeviceClasses.DeviceTypeFor("HyperDeck"));
     }
 
     [Fact]

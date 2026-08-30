@@ -1,5 +1,6 @@
 using System.Text.Json.Serialization;
 using Bmd.Commands;
+using Bmd.Commands.Atem;
 using Bmd.Commands.MultiView;
 using Bmd.Commands.Videohub;
 using Bmd.Config;
@@ -36,6 +37,13 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(MultiViewExportResult))]
 [JsonSerializable(typeof(MultiViewRestoreResult))]
 [JsonSerializable(typeof(MultiViewUpdateResult))]
+[JsonSerializable(typeof(AtemInfoResult))]
+[JsonSerializable(typeof(AtemSourceEntry[]))]
+[JsonSerializable(typeof(AtemAuxEntry[]))]
+[JsonSerializable(typeof(AtemStatusResult))]
+[JsonSerializable(typeof(AtemRenameResult))]
+[JsonSerializable(typeof(AtemAuxSetResult))]
+[JsonSerializable(typeof(AtemBusSetResult))]
 [JsonSerializable(typeof(VersionResult))]
 [JsonSerializable(typeof(UpdateCheckResult))]
 [JsonSerializable(typeof(UpdateResult))]

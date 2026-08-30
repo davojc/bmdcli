@@ -1,5 +1,6 @@
 using System.Text;
 using System.Text.RegularExpressions;
+using Bmd.Devices.Atem;
 using Bmd.Devices.Videohub;
 
 namespace Bmd.Config;
@@ -78,6 +79,42 @@ public sealed class BackupStore
             || verification.Inputs.Length != snapshot.Inputs.Length
             || verification.Outputs.Where((o, i) => o != snapshot.Outputs[i]).Any()
             || verification.Inputs.Where((input, i) => input != snapshot.Inputs[i]).Any())
+        {
+            throw new IOException($"backup written to {path} did not read back intact");
+        }
+
+        Prune(deviceKey);
+        return path;
+    }
+
+    /// <summary>Writes an ATEM snapshot, verifies it reads back intact, prunes old ones.
+    ///
+    /// A separate overload rather than a shared abstraction over both snapshot types: they have
+    /// no fields in common beyond a device name and a timestamp, and the read-back check is the
+    /// point of this method — a generic version could only compare the JSON text, which would
+    /// pass on a snapshot that round-trips to something structurally different.</summary>
+    public string Write(string deviceKey, AtemSnapshot snapshot)
+    {
+        var directory = Path.Combine(RootDirectory, deviceKey);
+        Directory.CreateDirectory(directory);
+        var path = UniquePath(directory, snapshot.ExportedAt);
+        File.WriteAllText(path, snapshot.ToJson());
+
+        AtemSnapshot verification;
+        try
+        {
+            verification = AtemSnapshot.FromJson(File.ReadAllText(path));
+        }
+        catch (SnapshotFormatException ex)
+        {
+            throw new IOException($"backup written to {path} did not read back intact: {ex.Message}", ex);
+        }
+        if (verification.Device != snapshot.Device
+            || verification.ExportedAt != snapshot.ExportedAt
+            || verification.Sources.Length != snapshot.Sources.Length
+            || verification.Auxes.Length != snapshot.Auxes.Length
+            || verification.Sources.Where((s, i) => s != snapshot.Sources[i]).Any()
+            || verification.Auxes.Where((a, i) => a != snapshot.Auxes[i]).Any())
         {
             throw new IOException($"backup written to {path} did not read back intact");
         }

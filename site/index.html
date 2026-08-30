@@ -30,12 +30,14 @@
           <a class="btn btn-primary" href="#download">Download</a>
           <a class="btn" href="videohub.html">Videohub guide</a>
           <a class="btn" href="multiview.html">MultiView guide</a>
+          <a class="btn" href="atem.html">ATEM guide</a>
         </div>
 
         <ul class="status-list">
           <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> Videohub — routing, labels, locks, backups, live watch.</li>
           <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> MultiView — views, layout, format, overlays, solo, backups, live watch.</li>
-          <li class="status-pending"><span class="status-dot" aria-hidden="true">…</span> HyperDeck and ATEM — not implemented yet.</li>
+          <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> ATEM — input names, aux routing, program and preview, backups.</li>
+          <li class="status-pending"><span class="status-dot" aria-hidden="true">…</span> HyperDeck — not implemented yet.</li>
         </ul>
       </div>
 
@@ -211,6 +213,14 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
         <dd>Set the window layout; <code>format</code> sets the output video format the same way. The device validates the value, not bmd.</dd>
       </div>
       <div>
+        <dt>bmd atem input rename 2 "Camera Two"</dt>
+        <dd>Name an input on an ATEM, so the label shows up in its multiviewer and in every other controller. See the <a href="atem.html">ATEM guide</a>.</dd>
+      </div>
+      <div>
+        <dt>bmd atem aux set 1 4</dt>
+        <dd>Point auxiliary output 1 at source 4 — the usual feed for a stage monitor or a recorder.</dd>
+      </div>
+      <div>
         <dt>--json</dt>
         <dd>On any command. One JSON document on stdout with stable field names, so scripts and agents can read it.</dd>
       </div>
@@ -231,8 +241,9 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
       <p>
         This page only shows a slice of what <code>bmd</code> does. The
         <a href="videohub.html"><strong>Videohub guide</strong></a> and the
-        <a href="multiview.html"><strong>MultiView guide</strong></a> each cover every command in
-        their group, the backup/restore workflow, scripting with <code>--json</code>, and
+        <a href="multiview.html"><strong>MultiView guide</strong></a> and the
+        <a href="atem.html"><strong>ATEM guide</strong></a> each cover every command in
+        their group, the backup workflow, scripting with <code>--json</code>, and
         troubleshooting.
       </p>
     </div>
@@ -242,6 +253,7 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
     <p>
       <a href="videohub.html">Videohub guide</a>
       · <a href="multiview.html">MultiView guide</a>
+      · <a href="atem.html">ATEM guide</a>
       · <a href="install.html">Install &amp; verify</a>
       · <a href="https://github.com/davojc/bmdcli">Source on GitHub</a>
       · <a href="https://github.com/davojc/bmdcli/blob/main/LICENSE">MIT licensed</a>

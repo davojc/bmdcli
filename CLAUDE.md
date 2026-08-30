@@ -6,6 +6,13 @@ Second device: MultiView (`bmd multiview view set 1 3`) — it speaks the same
 Videohub Ethernet Protocol, so it shares the client and session plumbing;
 what differs is vocabulary (views, not outputs) and its own CONFIGURATION
 block (layout, output format, overlays, solo).
+Third device: ATEM (`bmd atem input rename 2 "Camera Two"`) — shares nothing
+below the command layer. Binary UDP 9910, session handshake, sequence numbers
+and ACKs, and **no published protocol at all**: read layouts come from a
+hardware capture (`docs/superpowers/plans/assets/atem-hd3-statedump.hex`),
+command layouts cannot, so every mutation waits for the device to report the
+change back rather than assuming it landed. See
+`docs/superpowers/specs/2026-08-30-atem-design.md`.
 Design spec: `docs/superpowers/specs/2026-08-29-bmd-cli-design.md` — read it
 before architectural changes; update it when a design decision changes.
 
@@ -93,6 +100,8 @@ Milestones (detail in spec): 1 skeleton+config ✅ → 2 read path + agent JSON 
 → 3 export + backup store → 4 write path (with auto-backup) → 5 restore →
 6 watch → 7 mDNS discovery → 8 tag-driven release pipeline + Pages site →
 9 self-update ✅ → 10 MultiView (second device: `bmd multiview`, discovery,
-site guide) ✅. Future devices:
-HyperDeck (text/TCP), ATEM (binary/UDP) — each gets `Commands/<Device>/` +
-`Devices/<Device>/` mirroring Videohub.
+site guide) ✅ → 11 ATEM (third device, its own binary/UDP protocol:
+`bmd atem` info/input list/status/aux list, input rename, aux set,
+program+preview set) ✅. Future: ATEM export/restore/watch, transitions and
+keyers; HyperDeck (text/TCP, port 9993 — note it advertises on 9977 with no
+`class=`, so discovery needs a second identification path).

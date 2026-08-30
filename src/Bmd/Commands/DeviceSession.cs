@@ -11,9 +11,9 @@ namespace Bmd.Commands;
 /// Parameterised by config section — `videohub`, `multiview` — because that is genuinely the
 /// only thing that differed between the two groups. Both talk the same protocol to the same
 /// port with the same client; only the key they read their address from changes.</summary>
-public sealed class DeviceSession(string configSection, Func<ConfigStore> loadConfig)
+internal sealed class DeviceSession(string configSection, Func<ConfigStore> loadConfig)
 {
-    public string ConfigSection { get; } = configSection;
+    readonly string _configSection = configSection;
 
     /// <summary>Synchronous-action convenience over <see cref="RunWithClientAsync"/>.</summary>
     public Task<int> WithClientAsync(string? host, int? port, int? timeout, Func<VideohubClient, int> action)
@@ -32,7 +32,12 @@ public sealed class DeviceSession(string configSection, Func<ConfigStore> loadCo
                 var store = BackupStore.FromConfig(loadConfig());
                 if (store.AutoBackupEnabled)
                 {
-                    var snapshot = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow);
+                    // includeConfiguration: true so a MultiView mutation's backup captures its
+                    // pre-change CONFIGURATION (layout, format, solo, the display toggles) — the
+                    // very thing most MultiView mutations change. A no-op for a Videohub: FromState
+                    // only populates Configuration when state.ExtraBlocks has a CONFIGURATION
+                    // block, which a Videohub never sends (see VideohubSnapshot.FromState).
+                    var snapshot = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow, includeConfiguration: true);
                     backupPath = store.Write(
                         BackupStore.DeviceKey(client.Host, client.State.Device.ModelName), snapshot);
                 }
@@ -68,7 +73,9 @@ public sealed class DeviceSession(string configSection, Func<ConfigStore> loadCo
                         // never mutated except by our own sends, so as long as every caller
                         // invokes this before its first mutation, this is always the pre-change
                         // state, regardless of how much later in the call the thunk fires.
-                        var snapshot = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow);
+                        // includeConfiguration: true — see WithBackedUpClientAsync for why (a
+                        // no-op for a Videohub).
+                        var snapshot = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow, includeConfiguration: true);
                         written = store.Write(
                             BackupStore.DeviceKey(client.Host, client.State.Device.ModelName), snapshot);
                     }
@@ -85,16 +92,16 @@ public sealed class DeviceSession(string configSection, Func<ConfigStore> loadCo
         => RunCatchingAsync(async () =>
         {
             var store = loadConfig();
-            var resolvedHost = host ?? GetConfig(store, $"{ConfigSection}.host");
+            var resolvedHost = host ?? GetConfig(store, $"{_configSection}.host");
             if (resolvedHost is null)
             {
                 Console.Error.WriteLine(
-                    $"error: no host configured for {ConfigSection} " +
-                    $"(run: bmd config set {ConfigSection}.host <addr>)");
+                    $"error: no host configured for {_configSection} " +
+                    $"(run: bmd config set {_configSection}.host <addr>)");
                 return 1;
             }
-            var resolvedPort = port ?? GetConfigInt(store, $"{ConfigSection}.port") ?? 9990;
-            var resolvedTimeout = timeout ?? GetConfigInt(store, $"{ConfigSection}.timeout") ?? 5;
+            var resolvedPort = port ?? GetConfigInt(store, $"{_configSection}.port") ?? 9990;
+            var resolvedTimeout = timeout ?? GetConfigInt(store, $"{_configSection}.timeout") ?? 5;
             if (resolvedTimeout <= 0)
             {
                 Console.Error.WriteLine("error: timeout must be a positive number of seconds");
@@ -108,7 +115,7 @@ public sealed class DeviceSession(string configSection, Func<ConfigStore> loadCo
     /// <summary>Runs <paramref name="body"/>, mapping every expected failure to one stderr line
     /// plus exit code 1. The single filter shared by the real connect+action path and by the
     /// <c>ThrowingProbeAsync</c> test seam.</summary>
-    public static async Task<int> RunCatchingAsync(Func<Task<int>> body)
+    internal static async Task<int> RunCatchingAsync(Func<Task<int>> body)
     {
         try
         {

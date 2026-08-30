@@ -49,4 +49,21 @@ public class ConfigPathsTests : IDisposable
         Assert.Equal("config", Path.GetFileName(path));
         Assert.Equal("bmd", Path.GetFileName(Path.GetDirectoryName(path)!));
     }
+
+    [Fact]
+    public void CacheDirectory_EndsInBmdAndIsRooted()
+    {
+        var path = ConfigPaths.CacheDirectory;
+        Assert.True(Path.IsPathRooted(path));
+        Assert.Equal("bmd", Path.GetFileName(path));
+    }
+
+    [Fact]
+    public void CacheDirectory_IsDistinctFromTheGlobalConfigFile()
+    {
+        // Cache is disposable; config is not. They must never be the same location.
+        Assert.NotEqual(
+            Path.GetFullPath(ConfigPaths.GlobalConfigPath),
+            Path.GetFullPath(ConfigPaths.CacheDirectory));
+    }
 }

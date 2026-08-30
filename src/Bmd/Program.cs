@@ -42,6 +42,12 @@ app.Add("multiview input rename", multiview.InputRename);
 app.Add("multiview view rename", multiview.ViewRename);
 app.Add("multiview view lock", multiview.ViewLock);
 app.Add("multiview view unlock", multiview.ViewUnlock);
+app.Add("multiview layout", multiview.Layout);
+app.Add("multiview format", multiview.Format);
+app.Add("multiview solo", multiview.Solo);
+app.Add("multiview show", multiview.Show);
+app.Add("multiview take-mode", multiview.TakeMode);
+app.Add("multiview widescreen-sd", multiview.WidescreenSd);
 
 var discover = new DiscoverCommands();
 app.Add("discover", discover.Discover);

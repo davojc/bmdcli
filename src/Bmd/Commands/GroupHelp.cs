@@ -47,6 +47,12 @@ internal static class GroupHelp
         new("multiview view rename", "Rename a view (1-based)."),
         new("multiview view lock", "Take the lock on a view (1-based)."),
         new("multiview view unlock", "Release the lock on a view (1-based)."),
+        new("multiview layout", "Set the window layout, e.g. 2x2. The device validates the value, not bmd."),
+        new("multiview format", "Set the output video format, e.g. 1080i5994. The device validates the value."),
+        new("multiview solo", "Show one source full-screen, or 'off' to leave solo mode."),
+        new("multiview show", "Turn an on-screen overlay on or off: borders, labels, audio-meters, tally."),
+        new("multiview take-mode", "Turn take mode on or off."),
+        new("multiview widescreen-sd", "Turn widescreen SD on or off."),
     ];
 
     static readonly string[] Groups = ["config", "videohub", "multiview"];

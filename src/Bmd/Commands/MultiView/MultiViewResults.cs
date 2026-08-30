@@ -22,3 +22,7 @@ public sealed record MultiViewRenameResult(
     string Kind, int N, string OldLabel, string NewLabel, string? Backup);
 
 public sealed record MultiViewLockResult(int View, string ViewLabel, string Lock, string? Backup);
+
+/// <summary>One CONFIGURATION property write. Setting is the protocol's own property name, so
+/// the output says exactly what was sent to the device.</summary>
+public sealed record MultiViewConfigSetResult(string Setting, string Value, string? Backup);

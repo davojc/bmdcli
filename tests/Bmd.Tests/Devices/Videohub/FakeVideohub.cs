@@ -37,8 +37,15 @@ public sealed class FakeVideohub : IAsyncDisposable
     // preserved verbatim in their original order so RenderDump() relays them faithfully —
     // just like a real device, whose dump this fake is meant to stand in for.
     List<(string Header, IReadOnlyList<string> Lines)> _extraBlocks = [];
+    readonly List<KeyValuePair<string, string>> _configuration = [];
 
     public int Port { get; }
+
+    /// <summary>The fake's CONFIGURATION properties, in the order the dump listed them.</summary>
+    public IReadOnlyList<KeyValuePair<string, string>> Configuration()
+    {
+        lock (_gate) return _configuration.ToArray();
+    }
 
     FakeVideohub(string dump, Func<string>? dumpFactory, bool rejectEverything, bool ackFirst = false,
         int? failAfter = null, int? dropAfter = null, int? stallAfter = null)
@@ -50,6 +57,21 @@ public sealed class FakeVideohub : IAsyncDisposable
         _dropAfter = dropAfter;
         _stallAfter = stallAfter;
         LoadState(dump);
+
+        // Seed CONFIGURATION from the dump so a MultiView fixture round-trips: the fake must be
+        // able to answer with the same block it was given, then mutate it.
+        foreach (var block in BlockReader.ReadBlocks(dump))
+        {
+            if (block.Header != "CONFIGURATION") continue;
+            foreach (var line in block.Lines)
+            {
+                var colon = line.IndexOf(':');
+                if (colon > 0)
+                    _configuration.Add(new KeyValuePair<string, string>(
+                        line[..colon].Trim(), line[(colon + 1)..].Trim()));
+            }
+        }
+
         _listener = new TcpListener(IPAddress.Loopback, 0);
         _listener.Start();
         Port = ((IPEndPoint)_listener.LocalEndpoint).Port;
@@ -410,6 +432,8 @@ public sealed class FakeVideohub : IAsyncDisposable
                 return TryApplyRouting(block);
             case "VIDEO OUTPUT LOCKS":
                 return TryApplyLocks(block);
+            case "CONFIGURATION":
+                return TryApplyConfiguration(block);
             default:
                 return null;
         }
@@ -454,6 +478,33 @@ public sealed class FakeVideohub : IAsyncDisposable
         }
         foreach (var (index, letter) in updates) _locks[index] = letter;
         return RenderChangedBlock(block.Header, updates.Select(u => (u.Index, u.Letter.ToString())));
+    }
+
+    /// <summary>Applies a CONFIGURATION mutation: unlike the other blocks, its lines are keyed by
+    /// property name (not a numeric index), and it accepts a partial block — only the properties
+    /// present are changed, matching the real device's own behaviour.</summary>
+    string? TryApplyConfiguration(ProtocolBlock block)
+    {
+        var updates = new List<(string Name, string Value)>();
+        foreach (var line in block.Lines)
+        {
+            var colon = line.IndexOf(':');
+            if (colon <= 0) return null;
+            updates.Add((line[..colon].Trim(), line[(colon + 1)..].Trim()));
+        }
+        foreach (var (name, value) in updates)
+        {
+            var index = _configuration.FindIndex(
+                p => string.Equals(p.Key, name, StringComparison.OrdinalIgnoreCase));
+            if (index >= 0) _configuration[index] = new KeyValuePair<string, string>(_configuration[index].Key, value);
+            else _configuration.Add(new KeyValuePair<string, string>(name, value));
+        }
+
+        var sb = new StringBuilder();
+        sb.Append(block.Header).Append(":\n");
+        foreach (var (name, value) in updates) sb.Append(name).Append(": ").Append(value).Append('\n');
+        sb.Append('\n');
+        return sb.ToString();
     }
 
     static string RenderChangedBlock(string header, IEnumerable<(int Index, string Value)> lines)

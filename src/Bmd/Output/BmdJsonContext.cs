@@ -31,6 +31,7 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(MultiViewRouteSetResult))]
 [JsonSerializable(typeof(MultiViewRenameResult))]
 [JsonSerializable(typeof(MultiViewLockResult))]
+[JsonSerializable(typeof(MultiViewConfigSetResult))]
 [JsonSerializable(typeof(VersionResult))]
 [JsonSerializable(typeof(UpdateCheckResult))]
 [JsonSerializable(typeof(UpdateResult))]

@@ -217,6 +217,18 @@ public class DiscoverCommandsTests : IDisposable
     }
 
     [Fact]
+    public async Task Discover_NothingFound_Human_HintIsDeviceTypeAgnostic()
+    {
+        // Fix 6: discover now recognizes more than one device type, so the empty-result hint
+        // must not assume "videohub" — it names the setting the same generic way the --add
+        // "needs an interactive terminal" hint already does.
+        Assert.Equal(0, await Commands([]).Discover());
+        var err = _stderr.ToString();
+        Assert.Contains("bmd config set <type>.host <address>", err);
+        Assert.DoesNotContain("videohub.host", err);
+    }
+
+    [Fact]
     public async Task Discover_DevicesAnsweredButNoneRecognized_DistinctNoteOnStderr_Exit0()
     {
         // Nine real devices answering, none of them a recognized type, must not be reported

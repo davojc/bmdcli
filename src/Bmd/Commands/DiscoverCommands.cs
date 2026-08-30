@@ -122,7 +122,7 @@ public class DiscoverCommands
     const string NoDevicesFoundMessage =
         "No devices found. mDNS discovery does not cross subnets, and some older Blackmagic " +
         "devices predate mDNS support entirely — if yours isn't showing up, configure it directly " +
-        "with `bmd config set videohub.host <address>`.";
+        "with `bmd config set <type>.host <address>`.";
 
     /// <summary>The stderr note for an empty result, shared by the plain listing and `--add`
     /// (which is why it lives here rather than being duplicated in <see cref="AddSelected"/>):
@@ -154,7 +154,7 @@ public class DiscoverCommands
 
         if (!_isInteractive())
         {
-            Console.Error.WriteLine("error: --add needs an interactive terminal; run bmd config set <type>.host <address> instead");
+            Console.Error.WriteLine("error: --add needs an interactive terminal; run bmd config set videohub.host <address> instead");
             return 2;
         }
 

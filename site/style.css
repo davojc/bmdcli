@@ -1,38 +1,44 @@
-/* bmd project site — hand-written, no framework.
-   System font stack for prose, monospace for commands/output. No web fonts. */
+/* bmd project site — hand-written, no framework, no web fonts, no CDN.
+   The page is committed to a single dark scheme rather than following the OS:
+   this tool lives in equipment racks and darkened control rooms, and a fixed
+   palette keeps the contrast budget to one combination instead of two.
+
+   Type has no display face to lean on (no web fonts), so the personality comes
+   from treatment instead: the display voice is monospace, because the product's
+   voice is a terminal. Sans is reserved for prose. Uppercase mono micro-labels
+   stand in for the legends silkscreened on equipment front panels. */
 
 :root {
-  --bg: #fbfbfa;
-  --bg-raised: #f2f2f1;
-  --fg: #1b1e22;
-  --fg-muted: #5b6169;
-  --border: #dfe1e4;
-  --accent: #0757d8;
-  --accent-fg: #ffffff;
+  /* Signature. "Ember" is the tally/record red-orange of broadcast gear, and it
+     is spent deliberately: lit crosspoints, primary actions, and the tick under
+     each section rule. Nothing else. */
+  --signal: #f2542d;
+  --signal-ink: #0a0b0d;          /* text on a solid --signal fill: 5.6:1 */
+  --signal-wash: rgba(242, 84, 45, 0.12);
+  --signal-glow: rgba(242, 84, 45, 0.45);
 
-  /* The demo terminal keeps a fixed dark palette in both color schemes —
-     a real terminal doesn't relabel itself for your OS theme, and it keeps
-     the contrast check to one combination instead of four. */
-  --term-bg: #0d1117;
-  --term-fg: #d7dde3;
-  --term-muted: #7d8590;
-  --term-prompt: #7ee787;
+  /* Link/OK hue, used in exactly two places (status dots, shell prompt sign) so
+     the page isn't a single accent on black. Cool, like an SDI link LED. */
+  --link-led: #56c8d8;
+
+  --bg: #0c0d10;                  /* rack black */
+  --panel: #14161a;
+  --panel-2: #191c21;
+  --term-bg: #08090b;             /* the terminal sits deeper than the panels */
+  --line: #24272e;
+  --line-soft: #1c1f25;
+
+  --fg: #e6e8ec;
+  --fg-dim: #989fab;              /* 7.3:1 on --bg */
+  --fg-faint: #79818e;            /* 5.0:1 — the floor, since it carries 0.7rem labels */
+  --link: #ff8a6b;                /* lighter than --signal: easier at prose size */
 
   --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
     sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, Consolas, "Liberation Mono", Menlo, monospace;
-}
+  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, "Liberation Mono",
+    Menlo, monospace;
 
-@media (prefers-color-scheme: dark) {
-  :root {
-    --bg: #14161a;
-    --bg-raised: #1b1e23;
-    --fg: #e7e9ec;
-    --fg-muted: #9aa1ab;
-    --border: #2c2f36;
-    --accent: #6ea8fe;
-    --accent-fg: #0b1220;
-  }
+  --measure: 46rem;               /* prose column, and the whole page */
 }
 
 * {
@@ -40,7 +46,7 @@
 }
 
 html {
-  color-scheme: light dark;
+  color-scheme: dark;
 }
 
 body {
@@ -48,23 +54,30 @@ body {
   background: var(--bg);
   color: var(--fg);
   font-family: var(--font-sans);
-  line-height: 1.55;
+  line-height: 1.6;
   -webkit-text-size-adjust: 100%;
 }
 
 .page {
-  max-width: 46rem;
+  max-width: var(--measure);
   margin: 0 auto;
   padding: 2.5rem 1.25rem 4rem;
 }
 
 a {
-  color: var(--accent);
+  color: var(--link);
+  text-underline-offset: 0.18em;
 }
 
 a:hover,
 a:focus-visible {
   text-decoration-thickness: 2px;
+}
+
+:focus-visible {
+  outline: 2px solid var(--signal);
+  outline-offset: 2px;
+  border-radius: 2px;
 }
 
 code,
@@ -74,72 +87,321 @@ kbd {
   font-size: 0.9em;
 }
 
-section {
-  margin-top: 3rem;
-}
-
 h1,
 h2,
 h3 {
-  line-height: 1.2;
+  line-height: 1.15;
+}
+
+/* ---------- Section rhythm ----------
+   One rule governs the gap between sections, so nothing later can quietly
+   double it up by adding its own top margin. */
+
+section {
+  margin-top: 3.25rem;
+}
+
+section > h2 {
+  position: relative;
+  margin: 0 0 1.15rem;
+  padding-bottom: 0.55rem;
+  border-bottom: 1px solid var(--line);
+  font-family: var(--font-mono);
+  font-size: 1.05rem;
+  font-weight: 700;
+  letter-spacing: -0.01em;
+}
+
+/* A short ember tick riding on each section rule — the one repeated flourish. */
+section > h2::after {
+  content: "";
+  position: absolute;
+  left: 0;
+  bottom: -1px;
+  width: 2.5rem;
+  height: 1px;
+  background: var(--signal);
+}
+
+/* Front-panel legend above a section heading. Only index.html sets these; the
+   guide's headings already carry real sequence numbers in their text. */
+section[data-label]::before {
+  content: attr(data-label);
+  display: block;
+  margin-bottom: 0.55rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
   font-weight: 600;
+  letter-spacing: 0.2em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
 }
 
-h2 {
-  font-size: 1.25rem;
-  border-bottom: 1px solid var(--border);
-  padding-bottom: 0.4rem;
-  margin-bottom: 1rem;
+/* ---------- Hero ---------- */
+
+.eyebrow {
+  margin: 0 0 1.75rem;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.22em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
 }
 
-/* ---------- Header ---------- */
-
-.hero {
-  margin-top: 0;
+/* Copy above, matrix below, full column width. A two-column hero was tried and
+   dropped: at this measure it squeezed the matrix to ~22rem, where 14 input
+   columns stop being legible. Full width lets it read like the router's own
+   front panel, which is the whole point of it. */
+.hero-grid {
+  display: grid;
+  gap: 2.5rem;
 }
 
-.hero-title {
-  display: flex;
-  align-items: baseline;
-  gap: 0.6rem;
-  flex-wrap: wrap;
-  margin: 0 0 0.5rem;
-}
-
-.hero-title h1 {
+.hero h1 {
   margin: 0;
-  font-size: 2.4rem;
   font-family: var(--font-mono);
-  letter-spacing: -0.02em;
-}
-
-.hero-title .prompt {
-  color: var(--fg-muted);
-  font-family: var(--font-mono);
-  font-size: 1.1rem;
+  font-size: clamp(3.2rem, 11vw, 5rem);
+  font-weight: 700;
+  letter-spacing: -0.055em;
 }
 
 .tagline {
-  font-size: 1.15rem;
-  color: var(--fg-muted);
-  margin: 0 0 1.25rem;
-  max-width: 38rem;
+  margin: 0.5rem 0 0;
+  font-size: 1.3rem;
+  font-weight: 600;
+  line-height: 1.3;
+  color: var(--fg);
+  max-width: 20ch;
 }
+
+.lede {
+  margin: 1rem 0 0;
+  color: var(--fg-dim);
+  max-width: 42ch;
+}
+
+.lede code {
+  color: var(--fg);
+}
+
+.cta-row {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.6rem;
+  margin-top: 1.6rem;
+}
+
+.btn {
+  display: inline-flex;
+  align-items: center;
+  min-height: 44px;
+  padding: 0 1.15rem;
+  border: 1px solid var(--line);
+  border-radius: 6px;
+  background: var(--panel);
+  color: var(--fg);
+  font-size: 0.95rem;
+  font-weight: 600;
+  text-decoration: none;
+}
+
+.btn:hover,
+.btn:focus-visible {
+  border-color: var(--fg-faint);
+}
+
+.btn-primary {
+  background: var(--signal);
+  border-color: var(--signal);
+  color: var(--signal-ink);
+}
+
+.btn-primary:hover,
+.btn-primary:focus-visible {
+  background: #ff6238;
+  border-color: #ff6238;
+}
+
+/* ---------- Signature: the crosspoint matrix ----------
+   A Videohub is a crosspoint matrix, and `route set 4 13` is a coordinate in
+   it. The grid below is the real state from the session further down the page:
+   outputs 1-3 all watching input 1, output 5 on input 13, and output 4 being
+   moved from input 3 to input 13 — the exact command the terminal demonstrates.
+
+   Final state is what's in the CSS; the animations play *towards* it. That way
+   `prefers-reduced-motion` simply switches them off and the correct end state
+   is already on screen. */
+
+.matrix {
+  border: 1px solid var(--line);
+  border-radius: 10px;
+  background: linear-gradient(180deg, var(--panel) 0%, var(--panel-2) 100%);
+  padding: 0.95rem 1.05rem 1.05rem;
+  overflow: hidden;
+}
+
+.matrix-head {
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  gap: 1rem;
+  margin-bottom: 0.9rem;
+  font-family: var(--font-mono);
+  font-size: 0.65rem;
+  font-weight: 600;
+  letter-spacing: 0.16em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.matrix-status {
+  display: inline-flex;
+  align-items: center;
+  gap: 0.45rem;
+  white-space: nowrap;
+}
+
+.led {
+  width: 6px;
+  height: 6px;
+  border-radius: 50%;
+  background: var(--link-led);
+  box-shadow: 0 0 6px rgba(86, 200, 216, 0.7);
+}
+
+.mrow {
+  display: grid;
+  grid-template-columns: 1.9rem repeat(14, minmax(0, 1fr));
+  gap: 0.28rem;
+  align-items: center;
+  position: relative;
+  margin-bottom: 0.28rem;
+}
+
+.mrow:last-child {
+  margin-bottom: 0;
+}
+
+.rlabel {
+  font-family: var(--font-mono);
+  font-size: 0.66rem;
+  font-weight: 600;
+  color: var(--fg-faint);
+  letter-spacing: 0.04em;
+}
+
+/* A crosspoint. Unlit ones are barely there; the grid should read as a field of
+   possibilities with a few live points, not as 70 competing dots. */
+.x {
+  display: block;
+  aspect-ratio: 1;
+  border-radius: 2px;
+  background: #23262c;
+}
+
+.x.on {
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal-glow);
+}
+
+/* The crosspoint being vacated, and the one being taken. */
+.x.from {
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal-glow);
+  opacity: 0;
+  animation: xp-release 0.5s ease-in 1.05s both;
+}
+
+.x.to {
+  background: var(--signal);
+  box-shadow: 0 0 8px var(--signal-glow);
+  animation: xp-take 0.45s ease-out 1.62s both;
+}
+
+/* The re-patch itself: a hairline sweeping from the old column to the new. */
+.trace {
+  grid-row: 1;
+  grid-column: 4 / 15;
+  height: 1px;
+  align-self: center;
+  background: linear-gradient(90deg, var(--signal-glow), var(--signal));
+  transform-origin: left center;
+  transform: scaleX(0);
+  animation: trace-sweep 0.62s cubic-bezier(0.4, 0, 0.2, 1) 1.05s both;
+}
+
+@keyframes xp-release {
+  from { opacity: 1; }
+  to { opacity: 0; }
+}
+
+@keyframes xp-take {
+  0% { opacity: 0; transform: scale(0.4); }
+  60% { opacity: 1; transform: scale(1.35); }
+  100% { opacity: 1; transform: scale(1); }
+}
+
+@keyframes trace-sweep {
+  0% { transform: scaleX(0); opacity: 1; }
+  70% { transform: scaleX(1); opacity: 1; }
+  100% { transform: scaleX(1); opacity: 0; }
+}
+
+.matrix-foot {
+  margin: 1rem 0 0;
+  padding-top: 0.85rem;
+  border-top: 1px solid var(--line-soft);
+  font-family: var(--font-mono);
+  font-size: 0.78rem;
+  color: var(--fg-dim);
+}
+
+/* Typed with a steps() width animation rather than script. 29ch is the exact
+   length of the command, so switching the animation off leaves it fully shown. */
+.typed {
+  display: inline-block;
+  width: 29ch;
+  max-width: 100%;
+  overflow: hidden;
+  white-space: nowrap;
+  vertical-align: bottom;
+  border-right: 2px solid var(--signal);
+  animation:
+    type 1.15s steps(29, end) 0.35s both,
+    caret 1s step-end 1.5s infinite;
+}
+
+.typed .sign {
+  color: var(--link-led);
+}
+
+@keyframes type {
+  from { width: 0; }
+  to { width: 29ch; }
+}
+
+@keyframes caret {
+  50% { border-color: transparent; }
+}
+
+/* ---------- Support status ---------- */
 
 .status-list {
   list-style: none;
-  margin: 0;
+  margin: 1.75rem 0 0;
   padding: 0;
   display: flex;
   flex-direction: column;
-  gap: 0.35rem;
-  font-size: 0.95rem;
+  gap: 0.4rem;
+  font-size: 0.9rem;
 }
 
 .status-list li {
   display: flex;
   align-items: baseline;
-  gap: 0.5rem;
+  gap: 0.55rem;
+  color: var(--fg-dim);
 }
 
 .status-dot {
@@ -149,29 +411,21 @@ h2 {
 }
 
 .status-ok .status-dot {
-  color: #1a7f37;
+  color: var(--link-led);
 }
 
-@media (prefers-color-scheme: dark) {
-  .status-ok .status-dot {
-    color: #56d364;
-  }
-}
-
-.status-pending .status-dot,
-.status-pending {
-  color: var(--fg-muted);
+.status-pending .status-dot {
+  color: var(--fg-faint);
 }
 
 /* ---------- Demo terminal ---------- */
 
 .terminal {
   background: var(--term-bg);
-  color: var(--term-fg);
+  border: 1px solid var(--line);
   border-radius: 8px;
   padding: 1.1rem 1.2rem;
   overflow-x: auto;
-  border: 1px solid #000;
 }
 
 .terminal pre {
@@ -179,20 +433,16 @@ h2 {
   white-space: pre;
 }
 
-.terminal .prompt-line {
-  color: var(--term-fg);
-}
-
 .terminal .prompt-sign {
-  color: var(--term-prompt);
+  color: var(--link-led);
 }
 
 .terminal .out {
-  color: var(--term-fg);
+  color: var(--fg-dim);
 }
 
 .terminal .muted {
-  color: var(--term-muted);
+  color: var(--fg-faint);
   font-style: italic;
 }
 
@@ -203,8 +453,8 @@ h2 {
 
 .demo-note {
   font-size: 0.9rem;
-  color: var(--fg-muted);
-  margin-top: 0.6rem;
+  color: var(--fg-dim);
+  margin-top: 0.7rem;
 }
 
 /* ---------- Downloads ---------- */
@@ -212,9 +462,9 @@ h2 {
 .downloads {
   display: grid;
   grid-template-columns: repeat(auto-fit, minmax(15.5rem, 1fr));
-  gap: 0.75rem;
+  gap: 0.7rem;
   padding: 0;
-  margin: 0 0 1rem;
+  margin: 0 0 1.25rem;
   list-style: none;
 }
 
@@ -222,10 +472,10 @@ h2 {
   display: flex;
   flex-direction: column;
   gap: 0.15rem;
-  padding: 0.85rem 1rem;
-  border: 1px solid var(--border);
+  padding: 0.9rem 1rem;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--bg-raised);
+  background: var(--panel);
   color: var(--fg);
   text-decoration: none;
   min-height: 44px;
@@ -234,7 +484,8 @@ h2 {
 
 .download-link:hover,
 .download-link:focus-visible {
-  border-color: var(--accent);
+  border-color: var(--signal);
+  background: var(--panel-2);
 }
 
 .download-link .platform {
@@ -243,38 +494,62 @@ h2 {
 
 .download-link .filename {
   font-family: var(--font-mono);
-  font-size: 0.85rem;
-  color: var(--fg-muted);
+  font-size: 0.82rem;
+  color: var(--fg-faint);
 }
 
 .download-link .badge {
   display: inline-block;
-  margin-top: 0.35rem;
-  font-size: 0.75rem;
-  font-weight: 600;
-  color: var(--accent-fg);
-  background: var(--accent);
-  border-radius: 999px;
-  padding: 0.1rem 0.55rem;
+  margin-top: 0.4rem;
   width: fit-content;
+  padding: 0.1rem 0.55rem;
+  border-radius: 999px;
+  background: var(--signal);
+  color: var(--signal-ink);
+  font-size: 0.72rem;
+  font-weight: 700;
+  letter-spacing: 0.02em;
 }
 
 .download-link.is-recommended {
-  border-color: var(--accent);
-  border-width: 2px;
-  padding: calc(0.85rem - 1px) calc(1rem - 1px);
+  border-color: var(--signal);
+  background: var(--signal-wash);
 }
 
 .verify {
-  font-size: 0.95rem;
-  color: var(--fg-muted);
+  font-size: 0.94rem;
+  color: var(--fg-dim);
 }
 
-.verify code {
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
+.verify code,
+.lede code,
+p code,
+li code,
+dd code {
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
   border-radius: 4px;
   padding: 0.05rem 0.35rem;
+}
+
+/* ---------- Command blocks ---------- */
+
+pre.cmd,
+.steps pre {
+  margin: 0.75rem 0;
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-left: 2px solid var(--signal);
+  border-radius: 6px;
+  padding: 0.65rem 0.85rem;
+  overflow-x: auto;
+}
+
+/* Device output rather than something to type — no ember edge, since nothing
+   here is an instruction. */
+pre.cmd.cmd-out {
+  border-left-color: var(--line);
+  color: var(--fg-dim);
 }
 
 /* ---------- Quick start ---------- */
@@ -285,37 +560,34 @@ h2 {
 }
 
 .steps li {
-  margin-bottom: 1rem;
+  margin-bottom: 1.15rem;
 }
 
 .steps li:last-child {
   margin-bottom: 0;
 }
 
+.steps li::marker {
+  font-family: var(--font-mono);
+  font-weight: 700;
+  color: var(--signal);
+}
+
 .steps pre {
-  margin: 0.4rem 0 0;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.6rem 0.8rem;
-  overflow-x: auto;
+  margin: 0.45rem 0 0;
 }
 
 /* ---------- Guide callout ---------- */
 
 .guide-callout {
-  border: 1px solid var(--border);
-  background: var(--bg-raised);
+  border: 1px solid var(--line);
   border-radius: 8px;
-  padding: 1rem 1.2rem;
+  background: var(--panel);
+  padding: 1.1rem 1.25rem;
 }
 
 .guide-callout p {
-  margin: 0 0 0.6rem;
-}
-
-.guide-callout p:last-child {
-  margin-bottom: 0;
+  margin: 0;
 }
 
 /* ---------- Guide page (videohub.html) ---------- */
@@ -325,34 +597,42 @@ h2 {
 }
 
 .back-link {
-  margin: 0 0 0.75rem;
-  font-size: 0.9rem;
+  margin: 0 0 1rem;
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
 }
 
 .back-link a {
   text-decoration: none;
+  color: var(--fg-dim);
 }
 
 .back-link a:hover,
 .back-link a:focus-visible {
-  text-decoration: underline;
+  color: var(--link);
 }
 
 .guide-header h1 {
-  margin: 0 0 0.4rem;
-  font-size: 1.9rem;
+  margin: 0 0 0.5rem;
+  font-family: var(--font-mono);
+  font-size: clamp(1.8rem, 5vw, 2.3rem);
+  font-weight: 700;
+  letter-spacing: -0.03em;
 }
 
 .guide-header .tagline {
-  margin-bottom: 0;
+  font-size: 1.05rem;
+  font-weight: 400;
+  color: var(--fg-dim);
+  max-width: 52ch;
 }
 
 .page-nav {
-  margin-top: 1.75rem;
-  padding: 0.9rem 1.1rem;
-  border: 1px solid var(--border);
+  margin-top: 2rem;
+  padding: 1rem 1.15rem;
+  border: 1px solid var(--line);
   border-radius: 8px;
-  background: var(--bg-raised);
+  background: var(--panel);
 }
 
 .page-nav ol {
@@ -364,32 +644,13 @@ h2 {
 
 .page-nav li {
   break-inside: avoid;
-  margin-bottom: 0.3rem;
+  margin-bottom: 0.35rem;
   font-size: 0.92rem;
 }
 
-@media (max-width: 560px) {
-  .page-nav ol {
-    columns: 1;
-  }
-}
-
-/* Standalone command / output blocks in prose (as opposed to .steps pre, which lives
-   inside a numbered list item). */
-pre.cmd {
-  margin: 0.75rem 0;
-  background: var(--bg-raised);
-  border: 1px solid var(--border);
-  border-radius: 6px;
-  padding: 0.6rem 0.8rem;
-  overflow-x: auto;
-}
-
-/* A block showing genuine device/CLI output rather than a command to type — same shape as
-   the demo terminal on the landing page, minus the always-dark background, since here it's
-   just illustrating text rather than staging a "live session" moment. */
-pre.cmd.cmd-out {
-  color: var(--fg-muted);
+.page-nav li::marker {
+  font-family: var(--font-mono);
+  color: var(--fg-faint);
 }
 
 dl.exit-codes {
@@ -407,19 +668,12 @@ dl.exit-codes > div {
 
 dl.exit-codes dt {
   font-family: var(--font-mono);
-  font-weight: 600;
-  color: var(--fg-muted);
+  font-weight: 700;
+  color: var(--signal);
 }
 
 dl.exit-codes dd {
   margin: 0;
-}
-
-@media (max-width: 480px) {
-  dl.exit-codes > div {
-    grid-template-columns: 1fr;
-    gap: 0.15rem;
-  }
 }
 
 .limitations li,
@@ -430,11 +684,11 @@ section#troubleshooting ul li {
 /* ---------- Footer ---------- */
 
 footer {
-  margin-top: 3.5rem;
+  margin-top: 4rem;
   padding-top: 1.5rem;
-  border-top: 1px solid var(--border);
-  font-size: 0.9rem;
-  color: var(--fg-muted);
+  border-top: 1px solid var(--line);
+  font-size: 0.88rem;
+  color: var(--fg-dim);
 }
 
 footer p {
@@ -442,21 +696,70 @@ footer p {
 }
 
 footer .disclaimer {
-  font-size: 0.82rem;
+  font-size: 0.8rem;
+  color: var(--fg-faint);
+  max-width: 52ch;
 }
 
-/* ---------- Small screens ---------- */
+/* ---------- Responsive ---------- */
 
-@media (max-width: 420px) {
-  .page {
-    padding: 1.5rem 1rem 3rem;
+@media (max-width: 560px) {
+  .page-nav ol {
+    columns: 1;
   }
 
-  .hero-title h1 {
-    font-size: 2rem;
+  dl.exit-codes > div {
+    grid-template-columns: 1fr;
+    gap: 0.15rem;
+  }
+}
+
+@media (max-width: 26rem) {
+  .page {
+    padding: 1.75rem 1rem 3rem;
+  }
+
+  .matrix {
+    padding: 0.8rem 0.7rem 0.9rem;
+  }
+
+  .mrow {
+    grid-template-columns: 1.5rem repeat(14, minmax(0, 1fr));
+    gap: 0.2rem;
+  }
+
+  .matrix-foot {
+    font-size: 0.7rem;
   }
 
   .tagline {
-    font-size: 1.05rem;
+    font-size: 1.15rem;
+  }
+}
+
+/* ---------- Reduced motion ----------
+   Every animation above ends on the state already written into the rules, so
+   switching them off leaves the finished picture: output 4 sitting on input 13
+   and the command fully typed. */
+
+@media (prefers-reduced-motion: reduce) {
+  *,
+  *::before,
+  *::after {
+    animation: none !important;
+    transition: none !important;
+  }
+
+  .trace {
+    display: none;
+  }
+
+  .x.to {
+    opacity: 1;
+    transform: none;
+  }
+
+  .typed {
+    border-right-color: transparent;
   }
 }

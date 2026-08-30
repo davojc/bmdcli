@@ -5,25 +5,69 @@
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bmd</title>
 <meta name="description" content="bmd — command-line control for Blackmagic Videohub routers. A single native binary, no dependencies.">
-<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTInIGZpbGw9JyMwNzU3ZDgnLz48dGV4dCB4PSczMicgeT0nNDUnIGZvbnQtZmFtaWx5PSdtb25vc3BhY2UnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9J3doaXRlJyB0ZXh0LWFuY2hvcj0nbWlkZGxlJz4mZ3Q7XzwvdGV4dD48L3N2Zz4=">
+<meta name="theme-color" content="#0c0d10">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTQnIGZpbGw9JyNmMjU0MmQnLz48dGV4dCB4PSczMicgeT0nNDUnIGZvbnQtZmFtaWx5PSdtb25vc3BhY2UnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9JyMwYzBkMTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnPiZndDtfPC90ZXh0Pjwvc3ZnPg==">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
 <div class="page">
 
   <header class="hero">
-    <div class="hero-title">
-      <span class="prompt" aria-hidden="true">$</span>
-      <h1>bmd</h1>
+    <p class="eyebrow">Blackmagic device CLI</p>
+
+    <div class="hero-grid">
+      <div class="hero-copy">
+        <h1>bmd</h1>
+        <p class="tagline">Route video from the command line.</p>
+        <p class="lede">
+          One native binary for Blackmagic Videohub routers. Nothing to install
+          alongside it, no runtime, no SDK. Every command documents itself and
+          every command speaks <code>--json</code>, so operators and agents drive
+          exactly the same tool.
+        </p>
+
+        <div class="cta-row">
+          <a class="btn btn-primary" href="#download">Download</a>
+          <a class="btn" href="videohub.html">Videohub guide</a>
+        </div>
+
+        <ul class="status-list">
+          <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> Videohub — routing, labels, locks, backups, live watch.</li>
+          <li class="status-pending"><span class="status-dot" aria-hidden="true">…</span> HyperDeck and ATEM — not implemented yet.</li>
+        </ul>
+      </div>
+
+      <!-- The signature: a Videohub *is* a crosspoint matrix, and `route set 4 13`
+           is a coordinate in it. The state shown is the real session below —
+           outputs 1-3 all on input 1, output 5 on input 13, and output 4 moving
+           from input 3 to input 13 as the command types out. -->
+      <div class="hero-matrix">
+        <div class="matrix">
+          <div class="matrix-head">
+            <span>Out &darr; / In &rarr;</span>
+            <span class="matrix-status"><i class="led" aria-hidden="true"></i>40 &times; 40</span>
+          </div>
+
+          <!-- role="img" wraps only the dot grid, so the command line below it stays
+               readable text rather than being swallowed into the image label. -->
+          <div class="matrix-grid" role="img"
+               aria-label="Videohub routing matrix, five outputs by fourteen inputs. Outputs 1, 2 and 3 take input 1. Output 5 takes input 13. Output 4 is being re-routed from input 3 to input 13.">
+
+          <div class="mrow"><span class="rlabel">01</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
+          <div class="mrow"><span class="rlabel">02</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
+          <div class="mrow"><span class="rlabel">03</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
+          <div class="mrow"><span class="rlabel">04</span><i class="x"></i><i class="x"></i><i class="x from"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x to"></i><i class="x"></i><span class="trace" aria-hidden="true"></span></div>
+          <div class="mrow"><span class="rlabel">05</span><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x on"></i><i class="x"></i></div>
+
+          </div>
+
+          <p class="matrix-foot"><span class="typed"><span class="sign">$</span> bmd videohub route set 4 13</span></p>
+        </div>
+      </div>
     </div>
-    <p class="tagline">Command-line control for Blackmagic Videohub routers.</p>
-    <ul class="status-list">
-      <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> Videohub — fully supported: routing, labels, locks, backups, live watch.</li>
-      <li class="status-pending"><span class="status-dot" aria-hidden="true">…</span> HyperDeck and ATEM — not implemented yet.</li>
-    </ul>
   </header>
 
-  <section id="demo">
+  <section id="demo" data-label="Session">
     <h2>See it work</h2>
     <p class="demo-note" style="margin-top:0;margin-bottom:0.75rem;">
       A real session against a Videohub on the local network. Assumes the hub's address is
@@ -51,7 +95,7 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
     </p>
   </section>
 
-  <section id="download">
+  <section id="download" data-label="Binaries">
     <h2>Download</h2>
     <p>Prebuilt, single-file native binaries. No .NET runtime to install.</p>
     <ul class="downloads">
@@ -129,7 +173,7 @@ shasum -a 256 --ignore-missing -c checksums.txt</code></pre>
     </p>
   </section>
 
-  <section id="quick-start">
+  <section id="quick-start" data-label="Setup">
     <h2>Quick start</h2>
     <ol class="steps">
       <li>

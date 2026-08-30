@@ -1,0 +1,57 @@
+# Runs the test suite on every push to main and every pull request. Nothing here publishes
+# anything, so this workflow holds no write scopes and feeds no attacker-controlled input
+# into a shell — see release.yml's header for why that distinction matters there.
+#
+# Why three operating systems for a platform-agnostic .NET suite: the tests exercise config
+# file discovery, the OS state/cache/config directories, and console output — exactly the
+# places where a path separator, a line ending, or a special-folder assumption passes on one
+# platform and fails on another. The suite runs in seconds, so the matrix is nearly free.
+#
+# This does NOT build with Native AOT. That happens per-platform in release.yml, because an
+# AOT compile is minutes rather than seconds. A trim or AOT warning therefore still surfaces
+# first at tag time; running an AOT publish here would catch it earlier, at a cost in CI time
+# on every push.
+
+name: CI
+
+on:
+  push:
+    branches:
+      - main
+  pull_request:
+    branches:
+      - main
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+# A superseded run on the same ref has nothing left to tell us; let the newer one win.
+concurrency:
+  group: ci-${{ github.ref }}
+  cancel-in-progress: true
+
+defaults:
+  run:
+    shell: bash
+
+jobs:
+  test:
+    name: Test (${{ matrix.os }})
+    runs-on: ${{ matrix.os }}
+    strategy:
+      fail-fast: false
+      matrix:
+        os:
+          - ubuntu-latest
+          - windows-latest
+          - macos-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test --configuration Release

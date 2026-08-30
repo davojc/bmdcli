@@ -44,8 +44,28 @@ defaults:
     shell: bash
 
 jobs:
+  # A tag must not publish binaries nobody ran the tests against. This gates the entire
+  # matrix below: fail here and no artifact is built, so no release is created.
+  #
+  # One runner is enough. ci.yml already ran the three-OS matrix on this commit when it was
+  # pushed to main; what this guards against is a tag placed on a commit that never went
+  # through CI at all — an older commit, a branch, or a push that raced the CI run.
+  test:
+    name: Test
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v7
+
+      - uses: actions/setup-dotnet@v6
+        with:
+          dotnet-version: '10.0.x'
+
+      - name: Test
+        run: dotnet test --configuration Release
+
   build:
     name: Build (${{ matrix.rid }})
+    needs: test
     runs-on: ${{ matrix.os }}
     strategy:
       fail-fast: false
@@ -67,9 +87,9 @@ jobs:
             os: macos-latest
             archive: bmd-osx-arm64.tar.gz
     steps:
-      - uses: actions/checkout@v4
+      - uses: actions/checkout@v7
 
-      - uses: actions/setup-dotnet@v4
+      - uses: actions/setup-dotnet@v6
         with:
           dotnet-version: '10.0.x'
 
@@ -120,7 +140,7 @@ jobs:
           tar czf "$ARCHIVE" -C "$publish_dir" bmd
 
       - name: Upload artifact
-        uses: actions/upload-artifact@v4
+        uses: actions/upload-artifact@v7
         with:
           name: ${{ matrix.archive }}
           path: ${{ matrix.archive }}
@@ -138,7 +158,7 @@ jobs:
       # GitHub API, so it has nothing to gain from a copy of repo content plus everything
       # to lose (a release job holds contents: write).
       - name: Download all artifacts
-        uses: actions/download-artifact@v4
+        uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true

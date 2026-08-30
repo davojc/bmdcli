@@ -41,7 +41,7 @@ public class ConfigCommandsJsonTests : IDisposable
         var root = Root();
         Assert.Equal("videohub.host", root.GetProperty("key").GetString());
         Assert.Equal("10.0.0.5", root.GetProperty("value").GetString());
-        Assert.Equal(Path.Combine(WorkDir, ConfigPaths.LocalFileName), root.GetProperty("file").GetString());
+        Assert.Equal(GlobalPath, root.GetProperty("file").GetString());
     }
 
     [Fact]
@@ -53,7 +53,7 @@ public class ConfigCommandsJsonTests : IDisposable
         var root = Root();
         Assert.Equal("videohub.host", root.GetProperty("key").GetString());
         Assert.Equal("10.0.0.5", root.GetProperty("value").GetString());
-        Assert.Equal(Path.Combine(WorkDir, ConfigPaths.LocalFileName), root.GetProperty("origin").GetString());
+        Assert.Equal(GlobalPath, root.GetProperty("origin").GetString());
     }
 
     [Fact]
@@ -67,8 +67,9 @@ public class ConfigCommandsJsonTests : IDisposable
     [Fact]
     public void List_Json_IsArrayOfEntries()
     {
-        Commands().Set("videohub.host", "10.0.0.5");
-        Commands().Set("update.check", "false", global: true);
+        // One key in each file, so the listing genuinely exercises merging the two scopes.
+        Commands().Set("videohub.host", "10.0.0.5", project: true);
+        Commands().Set("update.check", "false");
         _stdout.GetStringBuilder().Clear();
         Assert.Equal(0, Commands().List(json: true));
         var root = Root();

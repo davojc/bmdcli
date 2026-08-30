@@ -32,7 +32,7 @@ public class VideohubConfigErrorTests : IDisposable
     void SetConfig(string key, string value)
     {
         Assert.True(ConfigKey.TryParse(key, out var parsed));
-        ConfigStore.Load(GlobalPath, WorkDir).Set(parsed, value, global: false);
+        ConfigStore.Load(GlobalPath, WorkDir).Set(parsed, value, ConfigScope.Project);
     }
 
     VideohubCommands Commands() => new(() => ConfigStore.Load(GlobalPath, WorkDir));

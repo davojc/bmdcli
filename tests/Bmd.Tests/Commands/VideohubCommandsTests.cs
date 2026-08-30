@@ -65,8 +65,8 @@ public class VideohubCommandsTests : IDisposable
         var store = ConfigStore.Load(GlobalPath, WorkDir);
         Assert.True(ConfigKey.TryParse("videohub.host", out var hostKey));
         Assert.True(ConfigKey.TryParse("videohub.port", out var portKey));
-        store.Set(hostKey, "127.0.0.1", global: false);
-        store.Set(portKey, fake.Port.ToString(), global: false);
+        store.Set(hostKey, "127.0.0.1", ConfigScope.Project);
+        store.Set(portKey, fake.Port.ToString(), ConfigScope.Project);
         Assert.Equal(0, await commands.Info(json: true));
     }
 
@@ -103,8 +103,8 @@ public class VideohubCommandsTests : IDisposable
         var store = ConfigStore.Load(GlobalPath, WorkDir);
         Assert.True(ConfigKey.TryParse("videohub.host", out var hostKey));
         Assert.True(ConfigKey.TryParse("videohub.timeout", out var timeoutKey));
-        store.Set(hostKey, "127.0.0.1", global: false);
-        store.Set(timeoutKey, "-5", global: false);
+        store.Set(hostKey, "127.0.0.1", ConfigScope.Project);
+        store.Set(timeoutKey, "-5", ConfigScope.Project);
         Assert.Equal(2, await Commands().Info());
         Assert.Equal("", _stdout.ToString());
         Assert.Contains("timeout must be a positive", _stderr.ToString());
@@ -117,8 +117,8 @@ public class VideohubCommandsTests : IDisposable
         var store = ConfigStore.Load(GlobalPath, WorkDir);
         Assert.True(ConfigKey.TryParse("videohub.host", out var hostKey));
         Assert.True(ConfigKey.TryParse("videohub.port", out var portKey));
-        store.Set(hostKey, "127.0.0.1", global: false);
-        store.Set(portKey, "not-a-number", global: false);
+        store.Set(hostKey, "127.0.0.1", ConfigScope.Project);
+        store.Set(portKey, "not-a-number", ConfigScope.Project);
         Assert.Equal(1, await Commands().Info());
         Assert.Contains("videohub.port", _stderr.ToString());
     }

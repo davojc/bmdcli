@@ -287,12 +287,12 @@ public class DiscoverCommandsTests : IDisposable
     // --- --add -------------------------------------------------------------------------------
 
     [Fact]
-    public async Task Add_ValidSelection_WritesHostToLocalConfig_ConfirmsOnStdout()
+    public async Task Add_ValidSelection_WritesHostToUserConfig_ConfirmsOnStdout()
     {
         SetIn("1\n");
         Assert.Equal(0, await Commands([Hub]).Discover(add: true));
 
-        Assert.Equal("Set videohub.host = 192.168.1.10 in " + LocalConfigPath, _stdout.ToString().Trim());
+        Assert.Equal("Set videohub.host = 192.168.1.10 in " + GlobalPath, _stdout.ToString().Trim());
         Assert.Contains("1. Hub One (videohub)", _stderr.ToString());
         Assert.Contains("Select a device [1-1] (or q to cancel):", _stderr.ToString());
 
@@ -334,8 +334,8 @@ public class DiscoverCommandsTests : IDisposable
         Assert.Equal(0, await Commands([HubOddPort]).Discover(add: true));
 
         var text = _stdout.ToString();
-        Assert.Contains("Set videohub.host = 192.168.1.12 in " + LocalConfigPath, text);
-        Assert.Contains("Set videohub.port = 9991 in " + LocalConfigPath, text);
+        Assert.Contains("Set videohub.host = 192.168.1.12 in " + GlobalPath, text);
+        Assert.Contains("Set videohub.port = 9991 in " + GlobalPath, text);
 
         var store = ConfigStore.Load(GlobalPath, WorkDir);
         Assert.True(ConfigKey.TryParse("videohub.port", out var portKey));
@@ -359,7 +359,7 @@ public class DiscoverCommandsTests : IDisposable
         var entry = root[0];
         Assert.Equal("videohub.host", entry.GetProperty("key").GetString());
         Assert.Equal("192.168.1.10", entry.GetProperty("value").GetString());
-        Assert.Equal(LocalConfigPath, entry.GetProperty("file").GetString());
+        Assert.Equal(GlobalPath, entry.GetProperty("file").GetString());
     }
 
     [Fact]
@@ -381,12 +381,12 @@ public class DiscoverCommandsTests : IDisposable
         var host = root[0];
         Assert.Equal("videohub.host", host.GetProperty("key").GetString());
         Assert.Equal("192.168.1.12", host.GetProperty("value").GetString());
-        Assert.Equal(LocalConfigPath, host.GetProperty("file").GetString());
+        Assert.Equal(GlobalPath, host.GetProperty("file").GetString());
 
         var port = root[1];
         Assert.Equal("videohub.port", port.GetProperty("key").GetString());
         Assert.Equal("9991", port.GetProperty("value").GetString());
-        Assert.Equal(LocalConfigPath, port.GetProperty("file").GetString());
+        Assert.Equal(GlobalPath, port.GetProperty("file").GetString());
     }
 
     [Theory]
@@ -480,15 +480,30 @@ public class DiscoverCommandsTests : IDisposable
     }
 
     [Fact]
-    public async Task Add_Global_WritesToGlobalFileNotLocal()
+    public async Task Add_ByDefault_WritesToTheUserConfigNotTheCurrentDirectory()
     {
+        // A discovered device belongs to your network, not to whichever directory you happened to
+        // run discover from. Writing a .bmdconfig here would make the device appear to vanish the
+        // moment you cd elsewhere.
         SetIn("1\n");
-        Assert.Equal(0, await Commands([Hub]).Discover(add: true, global: true));
+        Assert.Equal(0, await Commands([Hub]).Discover(add: true));
 
         Assert.Contains("Set videohub.host = 192.168.1.10 in " + GlobalPath, _stdout.ToString());
         Assert.False(File.Exists(LocalConfigPath));
         Assert.True(File.Exists(GlobalPath));
         Assert.Contains("192.168.1.10", File.ReadAllText(GlobalPath));
+    }
+
+    [Fact]
+    public async Task Add_Project_WritesToLocalBmdconfigInstead()
+    {
+        SetIn("1\n");
+        Assert.Equal(0, await Commands([Hub]).Discover(add: true, project: true));
+
+        Assert.Contains("Set videohub.host = 192.168.1.10 in " + LocalConfigPath, _stdout.ToString());
+        Assert.True(File.Exists(LocalConfigPath));
+        Assert.Contains("192.168.1.10", File.ReadAllText(LocalConfigPath));
+        Assert.False(File.Exists(GlobalPath));
     }
 
     [Fact]
@@ -498,7 +513,7 @@ public class DiscoverCommandsTests : IDisposable
         // File.WriteAllText fails with an IO/permission error instead of writing a file.
         Directory.CreateDirectory(GlobalPath);
         SetIn("1\n");
-        Assert.Equal(1, await Commands([Hub]).Discover(add: true, global: true));
+        Assert.Equal(1, await Commands([Hub]).Discover(add: true));
         var err = _stderr.ToString();
         Assert.Contains("error:", err);
         Assert.DoesNotContain("   at ", err);

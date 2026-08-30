@@ -82,14 +82,14 @@ bmd multiview take-mode <on|off>           # behaviour, not display: kept out of
 bmd multiview widescreen-sd <on|off>
 bmd multiview config [--json]              # print the whole CONFIGURATION block
 
-bmd config set <key> <value> [--global]
+bmd config set <key> <value> [--project]  # user config by default
 bmd config get <key>
-bmd config unset <key> [--global]
+bmd config unset <key> [--project]
 bmd config list [--show-origin]
 
 bmd discover [--timeout <sec>] [--json]    # list supported devices found via mDNS
 bmd discover --all                         # list every Blackmagic responder
-bmd discover --add [--global]              # discover, pick from list, write config
+bmd discover --add [--project]             # discover, pick from list, write config
 
 bmd version                                # embedded version + RID, e.g. "1.2.0 (win-x64)"
 bmd update [--check]                       # --check reports only; bare form self-updates
@@ -166,8 +166,18 @@ Git-config model: INI files, layered, device-type sections.
 - **Local:** `.bmdconfig`, discovered by walking up from the current working
   directory (like git finding `.git`). Lets a per-studio/per-project folder pin
   its own device.
-- **Precedence:** command-line flag > local `.bmdconfig` > global config >
+- **Read precedence:** command-line flag > local `.bmdconfig` > global config >
   built-in default.
+- **Writes default to the user config**, and `--project` targets the local
+  `.bmdconfig` (reusing the one found by walk-up, or creating one in the current
+  directory). This deliberately departs from git, which defaults to the
+  repository. git's default is right because git *is* per-repository; a
+  Videohub's address is a property of your network, not of the directory you
+  happen to be standing in. Defaulting to local meant that following the tool's
+  own `run: bmd config set videohub.host <addr>` hint from two directories
+  produced two config files and a device that appeared to forget its address.
+  Read precedence is unchanged, so a directory that has deliberately pinned a
+  device still wins.
 - Keys are addressed as `section.key` (e.g. `videohub.host`). Non-device
   sections exist too: `update.check = true|false` (default true) controls the
   passive update notice.
@@ -331,9 +341,9 @@ devices `_bmd_blockcfg._tcp.local`. Each responder's TXT record carries a
   row in this table.
 - **`--add` flow:** discover, print a numbered list of supported devices,
   prompt for a selection, write config exactly as
-  `bmd config set videohub.host <ip>` would — local by default, `--global`
-  for the user-level file. If stdin is not a TTY: clear error pointing at
-  `config set`.
+  `bmd config set videohub.host <ip>` would — the user config by default,
+  `--project` for a local `.bmdconfig`. If stdin is not a TTY: clear error
+  pointing at `config set`.
 - **Implementation:** minimal hand-rolled mDNS client (~300 lines), per the
   zero-dependency/AOT rule (available .NET zeroconf libraries are unverified
   for AOT). DNS packet encode/parse is pure functions over bytes, unit tested

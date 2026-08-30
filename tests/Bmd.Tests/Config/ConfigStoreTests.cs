@@ -29,7 +29,7 @@ public class ConfigStoreTests : IDisposable
     public void Set_Global_CreatesFileAndDirectories_GetEffectiveReadsIt()
     {
         var store = Load();
-        var written = store.Set(Key("videohub.host"), "10.0.0.5", global: true);
+        var written = store.Set(Key("videohub.host"), "10.0.0.5", ConfigScope.User);
         Assert.Equal(GlobalPath, written);
         Assert.Equal("10.0.0.5", Load().GetEffective(Key("videohub.host")));
     }
@@ -38,7 +38,7 @@ public class ConfigStoreTests : IDisposable
     public void Set_Local_CreatesBmdconfigInStartDirectory()
     {
         var store = Load();
-        var written = store.Set(Key("videohub.host"), "10.0.0.9", global: false);
+        var written = store.Set(Key("videohub.host"), "10.0.0.9", ConfigScope.Project);
         Assert.Equal(Path.Combine(WorkDir, ConfigPaths.LocalFileName), written);
         Assert.Equal("10.0.0.9", Load().GetEffective(Key("videohub.host")));
     }
@@ -50,7 +50,7 @@ public class ConfigStoreTests : IDisposable
         File.WriteAllText(parentConfig, "[videohub]\n\tport = 9990\n");
         var nested = Directory.CreateDirectory(Path.Combine(WorkDir, "nested")).FullName;
         var store = ConfigStore.Load(GlobalPath, nested);
-        var written = store.Set(Key("videohub.host"), "10.0.0.9", global: false);
+        var written = store.Set(Key("videohub.host"), "10.0.0.9", ConfigScope.Project);
         Assert.Equal(parentConfig, written);
         Assert.Contains("port = 9990", File.ReadAllText(parentConfig));
         Assert.Contains("host = 10.0.0.9", File.ReadAllText(parentConfig));
@@ -60,8 +60,8 @@ public class ConfigStoreTests : IDisposable
     public void GetEffective_LocalOverridesGlobal()
     {
         var store = Load();
-        store.Set(Key("videohub.host"), "10.0.0.5", global: true);
-        store.Set(Key("videohub.host"), "10.0.0.9", global: false);
+        store.Set(Key("videohub.host"), "10.0.0.5", ConfigScope.User);
+        store.Set(Key("videohub.host"), "10.0.0.9", ConfigScope.Project);
         Assert.Equal("10.0.0.9", Load().GetEffective(Key("videohub.host")));
     }
 
@@ -69,9 +69,9 @@ public class ConfigStoreTests : IDisposable
     public void ListEffective_ShadowsGlobalWithLocal_AndReportsOrigin()
     {
         var store = Load();
-        store.Set(Key("videohub.host"), "10.0.0.5", global: true);
-        store.Set(Key("update.check"), "false", global: true);
-        store.Set(Key("videohub.host"), "10.0.0.9", global: false);
+        store.Set(Key("videohub.host"), "10.0.0.5", ConfigScope.User);
+        store.Set(Key("update.check"), "false", ConfigScope.User);
+        store.Set(Key("videohub.host"), "10.0.0.9", ConfigScope.Project);
 
         var entries = ConfigStore.Load(GlobalPath, WorkDir).ListEffective();
 
@@ -88,8 +88,8 @@ public class ConfigStoreTests : IDisposable
     public void Unset_RemovesFromChosenLayer()
     {
         var store = Load();
-        store.Set(Key("videohub.host"), "10.0.0.5", global: true);
-        Assert.True(Load().Unset(Key("videohub.host"), global: true));
+        store.Set(Key("videohub.host"), "10.0.0.5", ConfigScope.User);
+        Assert.True(Load().Unset(Key("videohub.host"), ConfigScope.User));
         Assert.Null(Load().GetEffective(Key("videohub.host")));
     }
 
@@ -97,7 +97,7 @@ public class ConfigStoreTests : IDisposable
     public void Unset_ReturnsFalse_WhenKeyAbsentInLayer()
     {
         var store = Load();
-        store.Set(Key("videohub.host"), "10.0.0.5", global: true);
-        Assert.False(Load().Unset(Key("videohub.host"), global: false));
+        store.Set(Key("videohub.host"), "10.0.0.5", ConfigScope.User);
+        Assert.False(Load().Unset(Key("videohub.host"), ConfigScope.Project));
     }
 }

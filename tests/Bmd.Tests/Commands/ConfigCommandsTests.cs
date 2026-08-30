@@ -41,6 +41,63 @@ public class ConfigCommandsTests : IDisposable
     }
 
     [Fact]
+    public void Set_ByDefault_WritesToTheUserConfigNotTheCurrentDirectory()
+    {
+        // The regression this guards: `set` used to default to a .bmdconfig in whatever directory
+        // you were standing in, so following the tool's own "run: bmd config set videohub.host
+        // <addr>" hint from two directories produced two files and a device that appeared to
+        // forget its address. A device address belongs to the user, not the working directory.
+        Assert.Equal(0, Commands().Set("videohub.host", "10.0.0.5"));
+
+        Assert.True(File.Exists(GlobalPath));
+        Assert.Contains("10.0.0.5", File.ReadAllText(GlobalPath));
+        Assert.False(File.Exists(Path.Combine(WorkDir, ".bmdconfig")));
+    }
+
+    [Fact]
+    public void Set_Project_WritesToLocalBmdconfigInstead()
+    {
+        Assert.Equal(0, Commands().Set("videohub.host", "10.0.0.9", project: true));
+
+        var local = Path.Combine(WorkDir, ".bmdconfig");
+        Assert.True(File.Exists(local));
+        Assert.Contains("10.0.0.9", File.ReadAllText(local));
+        Assert.False(File.Exists(GlobalPath));
+    }
+
+    [Fact]
+    public void Set_Project_StillWinsOverTheUserConfigWhenReading()
+    {
+        // Changing the write default must not change read precedence: a directory that has
+        // deliberately pinned a device still overrides the user's default.
+        Assert.Equal(0, Commands().Set("videohub.host", "10.0.0.5"));
+        Assert.Equal(0, Commands().Set("videohub.host", "10.0.0.9", project: true));
+
+        Assert.Equal(0, Commands().Get("videohub.host"));
+        Assert.Equal("10.0.0.9", _stdout.ToString().Trim());
+    }
+
+    [Fact]
+    public void Unset_ByDefault_TargetsTheUserConfig()
+    {
+        Assert.Equal(0, Commands().Set("videohub.host", "10.0.0.5"));
+        Assert.Equal(0, Commands().Unset("videohub.host"));
+        Assert.Equal(1, Commands().Get("videohub.host"));
+    }
+
+    [Fact]
+    public void Unset_ByDefault_DoesNotReachIntoAProjectConfig()
+    {
+        Assert.Equal(0, Commands().Set("videohub.host", "10.0.0.9", project: true));
+
+        // Set only in the project file, so a user-scope unset has nothing to remove and must say
+        // which scope it looked in rather than claiming the key is unset everywhere.
+        Assert.Equal(1, Commands().Unset("videohub.host"));
+        Assert.Contains("user config", _stderr.ToString());
+        Assert.Contains("10.0.0.9", File.ReadAllText(Path.Combine(WorkDir, ".bmdconfig")));
+    }
+
+    [Fact]
     public void Get_MissingKey_Exit1_MessageOnStderr()
     {
         Assert.Equal(1, Commands().Get("videohub.host"));
@@ -67,8 +124,9 @@ public class ConfigCommandsTests : IDisposable
     [Fact]
     public void List_PrintsEffectiveEntries()
     {
-        Commands().Set("videohub.host", "10.0.0.5", global: true);
-        Commands().Set("videohub.host", "10.0.0.9");
+        // Same key in both scopes: the project value must be the effective one.
+        Commands().Set("videohub.host", "10.0.0.5");
+        Commands().Set("videohub.host", "10.0.0.9", project: true);
         Assert.Equal(0, Commands().List());
         Assert.Equal("videohub.host=10.0.0.9", _stdout.ToString().Trim());
     }
@@ -76,7 +134,7 @@ public class ConfigCommandsTests : IDisposable
     [Fact]
     public void List_ShowOrigin_PrefixesFilePath()
     {
-        Commands().Set("videohub.host", "10.0.0.9");
+        Commands().Set("videohub.host", "10.0.0.9", project: true);
         Assert.Equal(0, Commands().List(showOrigin: true));
         var line = _stdout.ToString().Trim();
         Assert.Equal($"{Path.Combine(WorkDir, ConfigPaths.LocalFileName)}\tvideohub.host=10.0.0.9", line);
@@ -89,20 +147,20 @@ public class ConfigCommandsTests : IDisposable
     {
         // Make the global config path collide with a directory so the write fails.
         Directory.CreateDirectory(GlobalPath);
-        Assert.Equal(1, Commands().Set("videohub.host", "10.0.0.5", global: true));
+        Assert.Equal(1, Commands().Set("videohub.host", "10.0.0.5"));
         var stderr = _stderr.ToString();
         Assert.StartsWith("error:", stderr);
         Assert.DoesNotContain("   at ", stderr);
     }
 
     [Fact]
-    public void Get_GlobalConfigPathIsDirectory_Exit1_NoStackTrace()
+    public void Set_Project_ConfigPathIsDirectory_Exit1_NoStackTrace()
     {
-        // GetEffective doesn't touch the global path at read time (loaded lazily as empty),
-        // so exercise the failure via a local config directory collision instead.
+        // The sibling test above covers the same failure on the user config. This one keeps the
+        // project path covered too, since --project is the only way to reach that write now.
         var localConfigPath = Path.Combine(WorkDir, ConfigPaths.LocalFileName);
         Directory.CreateDirectory(localConfigPath);
-        Assert.Equal(1, Commands().Set("videohub.host", "10.0.0.5"));
+        Assert.Equal(1, Commands().Set("videohub.host", "10.0.0.5", project: true));
         var stderr = _stderr.ToString();
         Assert.StartsWith("error:", stderr);
         Assert.DoesNotContain("   at ", stderr);

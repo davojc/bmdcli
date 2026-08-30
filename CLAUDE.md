@@ -27,10 +27,12 @@ before architectural changes; update it when a design decision changes.
 - **User-facing numbering is 1-based** (matches device front panels). The wire
   protocol is 0-based. Conversion happens in exactly one place: the public
   boundary of `Devices/Videohub/`. Everything above that boundary is 1-based.
-- **No environment variables for configuration.** Config comes from
-  git-style layers: command-line flag > local `.bmdconfig` (walk-up discovery)
-  > global (`~/.config/bmd/config`, `%APPDATA%\bmd\config` on Windows) >
-  built-in default.
+- **No environment variables for configuration.** Reads are layered:
+  command-line flag > local `.bmdconfig` (walk-up discovery) > user config
+  (`~/.config/bmd/config`, `%APPDATA%\bmd\config` on Windows) > built-in
+  default. **Writes go to the user config unless `--project` is passed** —
+  unlike git, because a device address belongs to the network, not to the
+  directory you ran the command from.
 - **Layering:** `Devices/` never references ConsoleAppFramework or `Commands/`.
   Command classes stay thin (resolve config → call client → format). No shared
   device abstraction until a second device type exists.

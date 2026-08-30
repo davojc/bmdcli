@@ -16,15 +16,15 @@ public class ConfigCommands
     /// <summary>Set a configuration value.</summary>
     /// <param name="key">Configuration key, e.g. videohub.host.</param>
     /// <param name="value">Value to assign.</param>
-    /// <param name="global">-g, Write to the global config file instead of local .bmdconfig.</param>
+    /// <param name="project">Write to a .bmdconfig in the current directory tree instead of your user config, pinning this setting to this directory. Without it, the value is saved for your user and applies wherever you run bmd.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
-    public int Set([Argument] string key, [Argument] string value, bool global = false, bool json = false)
+    public int Set([Argument] string key, [Argument] string value, bool project = false, bool json = false)
     {
         if (!TryKey(key, out var k)) return 2;
         if (!TryValue(value)) return 2;
         return RunGuarded(() =>
         {
-            var file = _load().Set(k, value, global);
+            var file = _load().Set(k, value, project ? ConfigScope.Project : ConfigScope.User);
             if (json)
                 Console.WriteLine(JsonSerializer.Serialize(new ConfigSetResult(k.ToString(), value, file), BmdJsonContext.Default.ConfigSetResult));
             return 0;
@@ -60,16 +60,18 @@ public class ConfigCommands
 
     /// <summary>Remove a configuration key.</summary>
     /// <param name="key">Configuration key, e.g. videohub.host.</param>
-    /// <param name="global">-g, Remove from the global config file instead of local .bmdconfig.</param>
+    /// <param name="project">Remove from the .bmdconfig in the current directory tree instead of your user config.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
-    public int Unset([Argument] string key, bool global = false, bool json = false)
+    public int Unset([Argument] string key, bool project = false, bool json = false)
     {
         if (!TryKey(key, out var k)) return 2;
         return RunGuarded(() =>
         {
-            if (!_load().Unset(k, global))
+            if (!_load().Unset(k, project ? ConfigScope.Project : ConfigScope.User))
             {
-                Console.Error.WriteLine($"error: '{k}' is not set in the {(global ? "global" : "local")} config");
+                // Name the scope that was actually searched: a key set for the user but not in a
+                // .bmdconfig should not read as "not set" when the user ran `unset --project`.
+                Console.Error.WriteLine($"error: '{k}' is not set in the {(project ? "project" : "user")} config");
                 return 1;
             }
             if (json)

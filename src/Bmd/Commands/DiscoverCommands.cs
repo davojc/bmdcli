@@ -41,10 +41,10 @@ public class DiscoverCommands
     /// <param name="timeout">How long to wait for responses, in seconds.</param>
     /// <param name="all">List every responding device, not just recognized types — shows each device's raw advertised class, useful for learning what a real device reports. Cannot be combined with --add.</param>
     /// <param name="add">Interactively pick one of the discovered, recognized devices and write its host (and port, if not the default) into config — the same effect as running `bmd config set`, without typing the address by hand.</param>
-    /// <param name="global">Used with --add: write to the global config file instead of local .bmdconfig.</param>
+    /// <param name="project">Used with --add: write to a .bmdconfig in the current directory tree instead of your user config. Without it, the device is saved for your user and applies wherever you run bmd.</param>
     /// <param name="json">Emit the result as a JSON array on stdout (empty array when nothing is found); with --add, emit the written key(s) in the same shape as `bmd config set --json`.</param>
     /// <param name="ct">Cancelled by Ctrl+C.</param>
-    public async Task<int> Discover(int? timeout = null, bool all = false, bool add = false, bool global = false, bool json = false, CancellationToken ct = default)
+    public async Task<int> Discover(int? timeout = null, bool all = false, bool add = false, bool project = false, bool json = false, CancellationToken ct = default)
     {
         if (add && all)
         {
@@ -89,7 +89,7 @@ public class DiscoverCommands
             .ToArray();
 
         if (add)
-            return AddSelected(devices.Count, shown, global, json);
+            return AddSelected(devices.Count, shown, project, json);
 
         if (json)
         {
@@ -142,7 +142,7 @@ public class DiscoverCommands
     /// reject `--add --all` before reaching here, so every entry's <c>DeviceType</c> is non-null.
     /// <paramref name="devicesAnswered"/> is the unfiltered count (before that filtering), used
     /// only to pick the right <see cref="EmptyResultMessage"/> when nothing is left to add.</summary>
-    int AddSelected(int devicesAnswered, IReadOnlyList<DiscoveredDevice> shown, bool global, bool json)
+    int AddSelected(int devicesAnswered, IReadOnlyList<DiscoveredDevice> shown, bool project, bool json)
     {
         if (shown.Count == 0)
         {
@@ -188,7 +188,7 @@ public class DiscoverCommands
             var results = new List<ConfigSetResult>(toSet.Count);
             foreach (var (key, value) in toSet)
             {
-                var file = store.Set(key, value, global);
+                var file = store.Set(key, value, project ? ConfigScope.Project : ConfigScope.User);
                 if (json)
                     results.Add(new ConfigSetResult(key.ToString(), value, file));
                 else

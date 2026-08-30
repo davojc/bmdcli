@@ -62,11 +62,20 @@ Blackmagic Smart Videohub 40 x 40  videohub  192.168.4.100:9990</code></pre>
     </p>
     <pre class="cmd"><code>bmd config set videohub.host 192.168.1.50</code></pre>
     <p>
-      Configuration is layered: a <code>.bmdconfig</code> file in the current directory (or the
-      nearest parent directory that has one) overrides the global config file, and a command's own
-      <code>--host</code> flag overrides both. This lets you keep a personal default globally while
-      a project directory pins a different hub, and lets any single command override either for
-      one-off use. When you're not sure where a value is coming from:
+      That saves the address <strong>for your user</strong>, so it applies wherever you run bmd —
+      not just in the directory you happened to be in.
+    </p>
+    <p>
+      If you want a particular folder to point at a different hub — a show directory, a rig you
+      only touch from one place — add <code>--project</code> and the value goes into a
+      <code>.bmdconfig</code> there instead:
+    </p>
+    <pre class="cmd"><code>bmd config set videohub.host 192.168.1.60 --project</code></pre>
+    <p>
+      Reading is layered: a <code>.bmdconfig</code> in the current directory (or the nearest parent
+      that has one) overrides your user config, and a command's own <code>--host</code> flag
+      overrides both. So a project folder that has pinned a hub still wins. When you're not sure
+      where a value is coming from:
     </p>
     <pre class="cmd"><code>bmd config list --show-origin</code></pre>
     <p>

@@ -147,12 +147,13 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
   <section id="using" data-label="Commands">
     <h2>Using it</h2>
 
-    <p>Point bmd at your hub once — it remembers.</p>
+    <p>Point bmd at your hub once — it remembers, for your user, wherever you run it.</p>
     <pre class="cmd"><code>bmd discover --add</code></pre>
     <p class="demo-note">
       Or set the address by hand, if you already know it or discovery doesn't reach it (see the
       <a href="videohub.html#known-limitations">guide's known limitations</a>):
-      <code>bmd config set videohub.host 192.168.1.50</code>
+      <code>bmd config set videohub.host 192.168.1.50</code>. Add <code>--project</code> to pin a
+      device to the current folder instead, via a <code>.bmdconfig</code> there.
     </p>
 
     <p>

@@ -19,7 +19,7 @@ public class BackupStoreTests : IDisposable
     void SetConfig(string key, string value)
     {
         Assert.True(ConfigKey.TryParse(key, out var parsed));
-        Config().Set(parsed, value, global: false);
+        Config().Set(parsed, value, ConfigScope.Project);
     }
 
     BackupStore Store()

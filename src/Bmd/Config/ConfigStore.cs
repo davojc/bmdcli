@@ -2,6 +2,26 @@ namespace Bmd.Config;
 
 public sealed record ConfigEntry(string Key, string Value, string Origin);
 
+/// <summary>Which file a write targets.
+///
+/// Deliberately an enum rather than a bool. This used to be <c>bool global</c> defaulting to
+/// false, meaning writes landed in a <c>.bmdconfig</c> in whatever directory you happened to be
+/// standing in — so following the tool's own "run: bmd config set videohub.host &lt;addr&gt;" hint
+/// from two different directories produced two different config files and a device that seemed to
+/// forget its address. The default is now <see cref="User"/>. Flipping a bool's meaning is exactly
+/// how a call site gets silently missed, and the failure mode here is writing to the wrong file,
+/// so the compiler is made to check every one.</summary>
+public enum ConfigScope
+{
+    /// <summary>The per-user config file — the default, and the right home for a device address,
+    /// which is a property of your network rather than your working directory.</summary>
+    User,
+
+    /// <summary>The nearest <c>.bmdconfig</c> found by walking up from the current directory, or a
+    /// new one there if none exists. For pinning a directory to a particular device.</summary>
+    Project,
+}
+
 /// <summary>Layered config: local .bmdconfig (walk-up from start directory) over global file.</summary>
 public sealed class ConfigStore
 {
@@ -64,19 +84,24 @@ public sealed class ConfigStore
     static string KeyOf(string section, string key) =>
         $"{section.ToLowerInvariant()}.{key.ToLowerInvariant()}";
 
-    public string Set(ConfigKey key, string value, bool global)
+    /// <summary>Writes a value and returns the file it landed in. A <see cref="ConfigScope.Project"/>
+    /// write reuses the <c>.bmdconfig</c> found by walk-up when there is one, and otherwise creates
+    /// one in the current directory.</summary>
+    public string Set(ConfigKey key, string value, ConfigScope scope)
     {
-        var (file, path) = global
-            ? (_global, _globalPath)
-            : (_local, _localPath ?? Path.Combine(_startDirectory, ConfigPaths.LocalFileName));
+        var (file, path) = scope == ConfigScope.Project
+            ? (_local, _localPath ?? Path.Combine(_startDirectory, ConfigPaths.LocalFileName))
+            : (_global, _globalPath);
         file.Set(key.Section, key.Name, value);
         Save(file, path);
         return path;
     }
 
-    public bool Unset(ConfigKey key, bool global)
+    /// <summary>Removes a key from one file. Returns false when that file does not exist or does
+    /// not carry the key — removing from one scope never reaches into the other.</summary>
+    public bool Unset(ConfigKey key, ConfigScope scope)
     {
-        var (file, path) = global ? (_global, _globalPath) : (_local, _localPath);
+        var (file, path) = scope == ConfigScope.Project ? (_local, _localPath) : (_global, _globalPath);
         if (path is null || !file.Unset(key.Section, key.Name)) return false;
         Save(file, path);
         return true;

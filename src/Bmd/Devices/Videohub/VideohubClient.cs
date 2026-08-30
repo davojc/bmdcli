@@ -63,7 +63,15 @@ public sealed class VideohubClient : IAsyncDisposable
     /// the whole settle phase would truncate a slow-but-progressing device mid-dump and drop
     /// exactly the trailing block this exists to capture. The pathological case — a device that
     /// streams forever and never sends END PRELUDE — is bounded by the caller's connect timeout,
-    /// which is the correct outer bound for "this device is not behaving".</summary>
+    /// which is the correct outer bound for "this device is not behaving".
+    ///
+    /// A second, narrower failure mode this settle path introduces: <c>StreamReader.ReadLineAsync</c>
+    /// is cancelled mid-read when the window expires. If a device sends a partial line and then
+    /// pauses for longer than this window before completing it, the buffered characters are lost
+    /// and whatever arrives afterwards is read as a new (bogus) line. This needs a device that
+    /// writes a partial line and then stalls for over 250 ms — essentially impossible for a dump
+    /// written in one burst, which is every real device observed so far — but it is a real,
+    /// new-to-this-branch risk rather than a purely theoretical one, so it is written down here.</summary>
     const int DumpSettleWindowMs = 250;
 
     static async Task<VideohubState> ReadDumpAsync(StreamReader reader, CancellationToken ct)

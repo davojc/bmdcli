@@ -262,6 +262,27 @@ public class MultiViewCommandsTests : IDisposable
         Assert.Equal("Programme", device.OutputLabels()[0]);
     }
 
+    [Theory]
+    [InlineData("bad\nlabel")]
+    [InlineData("bad\rlabel")]
+    public async Task Rename_LabelWithNewline_Exit2_NoStackTrace(string label)
+    {
+        // Fix 2: MultiViewCommands.RenameAsync dropped VideohubCommands' TryValidateLabel guard.
+        // Without it, a newline reaches VideohubClient.CheckLabel, which throws ArgumentException
+        // — not in DeviceSession.RunCatchingAsync's filter — so it escapes as a raw stack trace
+        // with the wrong exit code instead of a clean exit-2 usage error.
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+
+        Assert.Equal(2, await Commands().InputRename(1, label, "127.0.0.1", device.Port));
+        Assert.Equal(2, await Commands().ViewRename(1, label, "127.0.0.1", device.Port));
+
+        Assert.Equal("Stream", device.InputLabels()[0]);
+        Assert.Equal("View 1", device.OutputLabels()[0]);
+        Assert.Equal("", _stdout.ToString());
+        Assert.Contains("error: label must not contain newlines", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+    }
+
     [Fact]
     public async Task InputRename_ChangesTheSourceLabel()
     {

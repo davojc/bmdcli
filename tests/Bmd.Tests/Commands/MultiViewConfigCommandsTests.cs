@@ -1,6 +1,7 @@
 using System.Text.Json;
 using Bmd.Commands.MultiView;
 using Bmd.Config;
+using Bmd.Devices.Videohub;
 using Bmd.Tests.Devices.Videohub;
 
 namespace Bmd.Tests.Commands;
@@ -131,6 +132,88 @@ public class MultiViewConfigCommandsTests : IDisposable
         Assert.Contains("1 and 4", _stderr.ToString());
     }
 
+    [Fact]
+    public async Task Solo_AgainstADeviceWithNoConfigurationBlock_Exit1_DeviceUntouched()
+    {
+        // Fix 3: Solo used to route the Solo Input view before ever checking that the device
+        // sent a CONFIGURATION block. Against a real Videohub (host misconfigured, typo,
+        // swapped device) that would silently re-route a real router output before the later
+        // CONFIGURATION send got rejected. The guard must fire before ANY mutation is sent.
+        await using var device = FakeVideohub.Start(Fixtures.Dump4x4);
+        var before = device.Routes().ToArray();
+        var mutationsBefore = device.ReceivedMutationCount();
+
+        var exit = await Commands().Solo("2", "127.0.0.1", device.Port);
+
+        Assert.Equal(1, exit);
+        Assert.Contains("probably a Videohub", _stderr.ToString());
+        Assert.Equal(before, device.Routes());
+        Assert.Equal(mutationsBefore, device.ReceivedMutationCount());
+    }
+
+    const string TinyMultiViewDump =
+        "PROTOCOL PREAMBLE:\nVersion: 2.8\n\n" +
+        "VIDEOHUB DEVICE:\n" +
+        "Device present: true\n" +
+        "Model name: Tiny MultiView\n" +
+        "Video inputs: 1\n" +
+        "Video outputs: 1\n\n" +
+        "INPUT LABELS:\n0 Only Input\n\n" +
+        "OUTPUT LABELS:\n0 Only Output\n\n" +
+        "VIDEO OUTPUT LOCKS:\n0 U\n\n" +
+        "VIDEO OUTPUT ROUTING:\n0 0\n\n" +
+        "CONFIGURATION:\nLayout: 1x1\n\n" +
+        "END PRELUDE:\n\n";
+
+    [Fact]
+    public async Task Solo_AgainstADeviceWithFewerThanTwoOutputs_Exit1_DeviceUntouched()
+    {
+        // Fix 3: soloView = VideoOutputs - 1 must never reach 0 (or negative) — that would throw
+        // ArgumentOutOfRangeException past RunCatchingAsync's filter, the same class of bug as
+        // the newline label (Fix 2). A device reporting a CONFIGURATION block but only one
+        // output is contrived, but the guard must still hold rather than crash.
+        await using var device = FakeVideohub.Start(TinyMultiViewDump);
+        var before = device.Routes().ToArray();
+
+        var exit = await Commands().Solo("1", "127.0.0.1", device.Port);
+
+        Assert.Equal(1, exit);
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+        Assert.Equal(before, device.Routes());
+    }
+
+    [Fact]
+    public async Task Solo_Json_ReportsTheInputAndItsLabel()
+    {
+        // Fix 4: solo --json used to report only "Solo enabled": "true"/"value", losing the
+        // input number and label the human output prints — an agent would need a follow-up
+        // query to learn what was actually routed.
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+
+        var exit = await Commands().Solo("3", "127.0.0.1", device.Port, json: true);
+
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(_stdout.ToString().Trim());
+        Assert.True(doc.RootElement.GetProperty("enabled").GetBoolean());
+        Assert.Equal(3, doc.RootElement.GetProperty("input").GetInt32());
+        Assert.Equal("Presenter", doc.RootElement.GetProperty("inputLabel").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(doc.RootElement.GetProperty("backup").GetString()));
+    }
+
+    [Fact]
+    public async Task Solo_Off_Json_ReportsNullInput()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+
+        var exit = await Commands().Solo("off", "127.0.0.1", device.Port, json: true);
+
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(_stdout.ToString().Trim());
+        Assert.False(doc.RootElement.GetProperty("enabled").GetBoolean());
+        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("input").ValueKind);
+        Assert.Equal(JsonValueKind.Null, doc.RootElement.GetProperty("inputLabel").ValueKind);
+    }
+
     [Theory]
     [InlineData("borders", "Display border")]
     [InlineData("labels", "Display labels")]
@@ -181,6 +264,30 @@ public class MultiViewConfigCommandsTests : IDisposable
 
         Assert.Equal(0, await Commands().WidescreenSd("off", "127.0.0.1", device.Port));
         Assert.Equal("false", Value(device, "Widescreen SD enabled"));
+    }
+
+    [Fact]
+    public async Task Layout_BackupCapturesThePreChangeConfiguration()
+    {
+        // Fix 1: the automatic pre-change backup must include CONFIGURATION — otherwise a
+        // restore from it leaves layout (and every other mutated setting) untouched, and the
+        // "mutations back up first" guarantee is hollow for exactly the commands whose
+        // pre-change state IS the configuration.
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+
+        var exit = await Commands().Layout("4x1", "127.0.0.1", device.Port, json: true);
+
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(_stdout.ToString().Trim());
+        var backupPath = doc.RootElement.GetProperty("backup").GetString();
+        Assert.False(string.IsNullOrWhiteSpace(backupPath));
+
+        var backup = VideohubSnapshot.FromJson(File.ReadAllText(backupPath!));
+        Assert.NotNull(backup.Configuration);
+        // Pre-change: the device's Layout was "2x2" before this Layout("4x1") call — the backup
+        // must have captured that, not the value the device now holds.
+        Assert.Equal("2x2", backup.Configuration!.Layout);
+        Assert.Equal("4x1", Value(device, "Layout"));
     }
 
     [Fact]

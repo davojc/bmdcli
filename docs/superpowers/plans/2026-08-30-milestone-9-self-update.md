@@ -856,11 +856,10 @@ public sealed class FakeHttpHandler : HttpMessageHandler
 {
     readonly Dictionary<string, Func<HttpResponseMessage>> _routes = new(StringComparer.Ordinal);
 
-    /// <summary>Every absolute URI this handler has been asked for, in order.</summary>
+    /// <summary>Every absolute URI this handler has been asked for, in order. Tests assert on it
+    /// to prove that --check never downloads and that an up-to-date binary fetches nothing beyond
+    /// the release metadata.</summary>
     public List<string> Requests { get; } = [];
-
-    /// <summary>Headers of the most recent request, for asserting the User-Agent GitHub requires.</summary>
-    public HttpRequestHeaders? LastRequestHeaders { get; private set; }
 
     public FakeHttpHandler Text(string url, string body, HttpStatusCode status = HttpStatusCode.OK)
     {
@@ -885,7 +884,6 @@ public sealed class FakeHttpHandler : HttpMessageHandler
     {
         var url = request.RequestUri!.AbsoluteUri;
         Requests.Add(url);
-        LastRequestHeaders = request.Headers;
         if (!_routes.TryGetValue(url, out var respond))
             return Task.FromResult(new HttpResponseMessage(HttpStatusCode.NotFound)
             {
@@ -895,8 +893,6 @@ public sealed class FakeHttpHandler : HttpMessageHandler
     }
 }
 ```
-
-Add `using System.Net.Http.Headers;` at the top of that file for `HttpRequestHeaders`.
 
 - [ ] **Step 2: Write the failing ReleaseClient tests**
 
@@ -936,7 +932,7 @@ public class ReleaseClientTests
     {
         var handler = new FakeHttpHandler().Text(LatestUrl, LatestJson);
 
-        var release = await ClientFor(handler).GetLatestReleaseAsync(TestContext.Current.CancellationToken);
+        var release = await ClientFor(handler).GetLatestReleaseAsync(CancellationToken.None);
 
         Assert.Equal("v0.2.0", release.TagName);
         Assert.False(release.PreRelease);
@@ -945,22 +941,16 @@ public class ReleaseClientTests
     }
 
     [Fact]
-    public async Task GetLatestReleaseAsync_SendsAUserAgentBecauseGitHubRejectsRequestsWithout()
+    public void CreateHttpClient_SendsAUserAgentBecauseGitHubRejectsRequestsWithout()
     {
-        var handler = new FakeHttpHandler().Text(LatestUrl, LatestJson);
-        var http = ReleaseClient.CreateHttpClient("0.1.0");
-        // Swap in the fake transport while keeping the headers CreateHttpClient configured.
-        var client = new ReleaseClient(new HttpClient(handler)
-        {
-            DefaultRequestHeaders = { { "User-Agent", $"bmd/0.1.0" } }
-        }, ApiBase);
-        http.Dispose();
+        // GitHub answers 403 to an API request carrying no User-Agent, so this is not cosmetic.
+        using var http = ReleaseClient.CreateHttpClient("0.1.0");
 
-        await client.GetLatestReleaseAsync(TestContext.Current.CancellationToken);
-
-        Assert.NotNull(handler.LastRequestHeaders);
-        Assert.Contains(handler.LastRequestHeaders!.UserAgent,
-            product => product.Product?.Name == "bmd");
+        var agent = Assert.Single(http.DefaultRequestHeaders.UserAgent);
+        Assert.Equal("bmd", agent.Product?.Name);
+        Assert.Equal("0.1.0", agent.Product?.Version);
+        Assert.Contains(http.DefaultRequestHeaders.Accept,
+            media => media.MediaType == "application/vnd.github+json");
     }
 
     [Fact]
@@ -969,7 +959,7 @@ public class ReleaseClientTests
         var handler = new FakeHttpHandler().Text(LatestUrl, "rate limited", HttpStatusCode.Forbidden);
 
         var ex = await Assert.ThrowsAsync<UpdateException>(
-            () => ClientFor(handler).GetLatestReleaseAsync(TestContext.Current.CancellationToken));
+            () => ClientFor(handler).GetLatestReleaseAsync(CancellationToken.None));
 
         Assert.Contains("403", ex.Message);
         Assert.DoesNotContain("Exception", ex.Message);
@@ -981,7 +971,7 @@ public class ReleaseClientTests
         var handler = new FakeHttpHandler().Text(LatestUrl, "{ this is not json");
 
         var ex = await Assert.ThrowsAsync<UpdateException>(
-            () => ClientFor(handler).GetLatestReleaseAsync(TestContext.Current.CancellationToken));
+            () => ClientFor(handler).GetLatestReleaseAsync(CancellationToken.None));
 
         Assert.Contains("could not be read", ex.Message);
     }
@@ -992,7 +982,7 @@ public class ReleaseClientTests
         var handler = new FakeHttpHandler().Throws(LatestUrl, new HttpRequestException("no such host"));
 
         var ex = await Assert.ThrowsAsync<UpdateException>(
-            () => ClientFor(handler).GetLatestReleaseAsync(TestContext.Current.CancellationToken));
+            () => ClientFor(handler).GetLatestReleaseAsync(CancellationToken.None));
 
         Assert.Contains("no such host", ex.Message);
     }
@@ -1003,7 +993,7 @@ public class ReleaseClientTests
         const string url = "https://downloads.example.test/checksums.txt";
         var handler = new FakeHttpHandler().Text(url, "abc  bmd-win-x64.zip\n");
 
-        var text = await ClientFor(handler).GetTextAsync(url, TestContext.Current.CancellationToken);
+        var text = await ClientFor(handler).GetTextAsync(url, CancellationToken.None);
 
         Assert.Equal("abc  bmd-win-x64.zip\n", text);
     }
@@ -1018,7 +1008,7 @@ public class ReleaseClientTests
 
         try
         {
-            await ClientFor(handler).DownloadToFileAsync(url, destination, TestContext.Current.CancellationToken);
+            await ClientFor(handler).DownloadToFileAsync(url, destination, CancellationToken.None);
             Assert.Equal(payload, File.ReadAllBytes(destination));
         }
         finally { if (File.Exists(destination)) File.Delete(destination); }
@@ -1034,7 +1024,7 @@ public class ReleaseClientTests
         try
         {
             await Assert.ThrowsAsync<UpdateException>(
-                () => ClientFor(handler).DownloadToFileAsync(url, destination, TestContext.Current.CancellationToken));
+                () => ClientFor(handler).DownloadToFileAsync(url, destination, CancellationToken.None));
             Assert.False(File.Exists(destination));
         }
         finally { if (File.Exists(destination)) File.Delete(destination); }
@@ -1065,7 +1055,7 @@ public class ReleaseClientTests
 }
 ```
 
-Note on `TestContext.Current.CancellationToken`: if the installed xUnit version does not expose it, pass `CancellationToken.None` instead — the assertions are unaffected either way. Verify which applies before writing the file by checking how other async tests in `tests/Bmd.Tests/Devices/Videohub/VideohubClientTests.cs` obtain a token, and match that file's convention exactly.
+Note: this project is on **xunit 2.9.3**, which has no `TestContext.Current` — that is xUnit v3 API and will not compile here. Async tests pass `CancellationToken.None`, matching `tests/Bmd.Tests/Devices/Videohub/VideohubClientTests.cs`. Do not "modernize" it.
 
 - [ ] **Step 3: Run to verify it fails**
 

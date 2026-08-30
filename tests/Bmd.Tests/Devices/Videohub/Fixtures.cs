@@ -51,7 +51,7 @@ public static class Fixtures
         "Device present: true\n" +
         "Model name: Blackmagic MultiView 4\n" +
         "Friendly name: AV Multiview\n" +
-        "Unique ID: 7C2E0D11C751\n" +
+        "Unique ID: 000000000000\n" +
         "Video inputs: 4\n" +
         "Video processing units: 0\n" +
         "Video outputs: 6\n" +

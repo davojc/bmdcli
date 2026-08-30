@@ -172,6 +172,69 @@ public class UpdateCommandsTests : IDisposable
     }
 
     [Fact]
+    public async Task Check_NoticeWordingIsByteIdenticalToUpdateNoticeFormat()
+    {
+        // UpdateNotice.Format owns this wording; asserting equality (not just a substring) means
+        // the two copies can never silently drift again.
+        var handler = new FakeHttpHandler().Text(LatestUrl, ReleaseJson("v0.2.0"));
+
+        await CommandFor(handler, "0.1.0").Update(check: true);
+
+        Assert.Equal(
+            UpdateNotice.Format("0.1.0", "0.2.0") + Environment.NewLine,
+            _stdout.ToString());
+    }
+
+    [Fact]
+    public void Constructor_DoesNotCreateTheReleaseClientEagerly()
+    {
+        // Program.cs constructs an UpdateCommands for every command, not just `update`; building
+        // the client eagerly here would mean every other command pays for an HttpClient and its
+        // SocketsHttpHandler that it never uses.
+        var created = false;
+        _ = new UpdateCommands(() =>
+        {
+            created = true;
+            return new ReleaseClient(new HttpClient(new FakeHttpHandler()), ApiBase);
+        }, "0.1.0", "win-x64", Path.Combine(Path.GetTempPath(), "bmd.exe"));
+
+        Assert.False(created);
+    }
+
+    [Fact]
+    public async Task Constructor_CreatesTheReleaseClientOnlyWhenUpdateActuallyRuns()
+    {
+        var created = false;
+        var handler = new FakeHttpHandler().Text(LatestUrl, ReleaseJson("v0.2.0"));
+        var command = new UpdateCommands(() =>
+        {
+            created = true;
+            return new ReleaseClient(new HttpClient(handler), ApiBase);
+        }, "0.1.0", "win-x64", Path.Combine(Path.GetTempPath(), "bmd.exe"));
+
+        Assert.False(created);
+
+        await command.Update(check: true);
+
+        Assert.True(created);
+    }
+
+    [Fact]
+    public async Task Update_AnUnexpectedExceptionBecomesACleanErrorLineInsteadOfPropagating()
+    {
+        // Anything other than HttpRequestException/IOException escapes ReleaseClient's own
+        // translation untouched; this proves it still can't reach the user as a stack trace.
+        var handler = new FakeHttpHandler().Throws(LatestUrl, new InvalidOperationException("boom"));
+
+        var exit = await CommandFor(handler, "0.1.0").Update();
+
+        Assert.Equal(1, exit);
+        Assert.Equal("error: boom" + Environment.NewLine, _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+        Assert.Equal("", _stdout.ToString());
+    }
+
+    [Fact]
     public async Task Check_UnparsableCurrentVersionIsAnError()
     {
         var handler = new FakeHttpHandler().Text(LatestUrl, ReleaseJson("v0.2.0"));

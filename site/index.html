@@ -155,9 +155,14 @@ shasum -a 256 --ignore-missing -c checksums.txt</code></pre>
       SHA-256 checksums before anything is replaced.
     </p>
     <p>
-      bmd also checks for a new release at most once a day and prints a one-line
+      bmd also checks for a new release at most once a day and prints a two-line
       reminder when one appears. To turn that off:
       <code>bmd config set update.check false</code>.
+    </p>
+    <p>
+      <strong>Windows:</strong> after an interrupted <code>bmd update</code>, it is possible to be
+      left with <code>bmd.exe.old</code> and no <code>bmd.exe</code>. Renaming
+      <code>bmd.exe.old</code> back to <code>bmd.exe</code> restores the previous version.
     </p>
   </section>
 

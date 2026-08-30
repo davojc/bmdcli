@@ -38,7 +38,11 @@ public sealed class UpdateNoticeRunner
     {
         try
         {
-            return Start(args, ConfigStore.LoadDefault(), UpdateCheckCache.Default(),
+            // ConfigStore.LoadDefault is passed as a method group, not invoked here: loading it
+            // means parsing the global config file and walking up the directory tree for a local
+            // .bmdconfig, and IsEligible only needs to pay for that once its three cheap,
+            // config-free checks have already passed.
+            return Start(args, ConfigStore.LoadDefault, UpdateCheckCache.Default(),
                 BuildInfo.Version, Console.IsErrorRedirected, FetchLatestAsync, DateTimeOffset.UtcNow);
         }
         catch
@@ -56,10 +60,10 @@ public sealed class UpdateNoticeRunner
 
     /// <summary>Test seam: every input the decision depends on, injected.</summary>
     internal static UpdateNoticeRunner Start(
-        string[] args, ConfigStore config, UpdateCheckCache cache, string currentVersion,
+        string[] args, Func<ConfigStore> loadConfig, UpdateCheckCache cache, string currentVersion,
         bool errorIsRedirected, Func<CancellationToken, Task<string?>> fetchLatest, DateTimeOffset now)
     {
-        if (!UpdateNotice.IsEligible(args, config, errorIsRedirected)) return Inert();
+        if (!UpdateNotice.IsEligible(args, loadConfig, errorIsRedirected)) return Inert();
 
         var entry = cache.Read();
         if (!UpdateCheckCache.IsStale(entry, now))
@@ -75,23 +79,23 @@ public sealed class UpdateNoticeRunner
     }
 
     /// <summary>Writes the notice, if there is one. Never throws: a failed passive check is
-    /// silent by design, and this runs after the command has already produced its output.</summary>
+    /// silent by design, and this runs after the command has already produced its output — so a
+    /// dead stderr handle must not turn into a stack trace on the way out of Program.cs.</summary>
     public void WriteIfAny(TextWriter writer)
     {
-        var latest = _cachedLatest;
-        if (_fetch is not null)
+        try
         {
-            try
-            {
-                if (_fetch.Wait(JoinWindow)) latest = _fetch.Result ?? latest;
-            }
-            catch
-            {
-                // Network down, rate limited, DNS failure — none of it is the user's problem here.
-            }
-        }
+            var latest = _cachedLatest;
+            if (_fetch is not null && _fetch.Wait(JoinWindow))
+                latest = _fetch.Result ?? latest;
 
-        if (UpdateNotice.Format(_currentVersion, latest) is { } text)
-            writer.WriteLine(text);
+            if (UpdateNotice.Format(_currentVersion, latest) is { } text)
+                writer.WriteLine(text);
+        }
+        catch
+        {
+            // Network down, rate limited, DNS failure, a closed stderr — none of it is the
+            // user's problem here.
+        }
     }
 }

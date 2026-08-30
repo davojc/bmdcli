@@ -153,6 +153,88 @@ public class UpdateInstallerTests : IDisposable
     }
 
     [Fact]
+    public void Replace_RestoresTheOriginalWhenTheSecondMoveFails()
+    {
+        if (!OperatingSystem.IsWindows()) return; // Unix renames over the original; no move-aside step
+        var current = Path_("bmd-current.exe");
+        var replacement = Path_("bmd-new.exe");
+        File.WriteAllText(current, "old");
+        File.WriteAllText(replacement, "new");
+
+        // Holding the staged replacement open with no sharing makes the second File.Move (the
+        // one that would put it at `current`) fail after the first move (current -> .old) has
+        // already gone through — this is the actual move-aside -> move-fails -> restore sequence,
+        // not just the pre-flight guard the replacement-missing test above stops at.
+        using (new FileStream(replacement, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            Assert.ThrowsAny<Exception>(() => UpdateInstaller.Replace(replacement, current));
+        }
+
+        Assert.True(File.Exists(current));
+        Assert.Equal("old", File.ReadAllText(current));
+        Assert.False(File.Exists(current + UpdateInstaller.OldSuffix));
+    }
+
+    [Fact]
+    public void Replace_ThrowsNamingTheOldPathWhenTheRestoreAlsoFails()
+    {
+        if (!OperatingSystem.IsWindows()) return; // Unix renames over the original; no move-aside step
+        var current = Path_("bmd-current.exe");
+        var replacement = Path_("bmd-new.exe");
+        File.WriteAllText(current, "old");
+        File.WriteAllText(replacement, "new");
+
+        using (new FileStream(replacement, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            // The move-aside (current -> .old) runs for real and succeeds; the second move fails
+            // for real (the replacement is locked, same as above); only the final restore step
+            // is substituted, because Windows' share-mode check has no way to let the first
+            // rename of a file through while blocking the second rename of that same file.
+            var ex = Assert.Throws<UpdateException>(() => UpdateInstaller.Replace(
+                replacement, current,
+                restoreMove: (_, _, _) => throw new IOException("simulated restore failure")));
+
+            Assert.Contains(current + UpdateInstaller.OldSuffix, ex.Message);
+        }
+    }
+
+    [Fact]
+    public void Replace_NamesTheMoveAsideStepDistinctlyFromTheMoveInStepWhenItFails()
+    {
+        if (!OperatingSystem.IsWindows()) return; // Unix has no move-aside step
+        var current = Path_("bmd-current.exe");
+        var replacement = Path_("bmd-new.exe");
+        File.WriteAllText(current, "old");
+        File.WriteAllText(replacement, "new");
+
+        // FileShare.Read (no Delete) blocks the rename that would move `current` aside, without
+        // preventing this test from reading it back afterwards.
+        using (new FileStream(current, FileMode.Open, FileAccess.Read, FileShare.Read))
+        {
+            var ex = Assert.Throws<UpdateException>(() => UpdateInstaller.Replace(replacement, current));
+            Assert.Contains("move the current binary aside", ex.Message);
+            Assert.DoesNotContain("install the new binary", ex.Message);
+        }
+    }
+
+    [Fact]
+    public void Replace_NamesTheMoveInStepDistinctlyFromTheMoveAsideStepWhenItFails()
+    {
+        if (!OperatingSystem.IsWindows()) return; // Unix has no move-aside step
+        var current = Path_("bmd-current.exe");
+        var replacement = Path_("bmd-new.exe");
+        File.WriteAllText(current, "old");
+        File.WriteAllText(replacement, "new");
+
+        using (new FileStream(replacement, FileMode.Open, FileAccess.Read, FileShare.None))
+        {
+            var ex = Assert.Throws<UpdateException>(() => UpdateInstaller.Replace(replacement, current));
+            Assert.Contains($"install the new binary at {current}", ex.Message);
+            Assert.DoesNotContain("move the current binary aside", ex.Message);
+        }
+    }
+
+    [Fact]
     public void Replace_OnUnixSetsTheExecuteBit()
     {
         if (OperatingSystem.IsWindows()) return;

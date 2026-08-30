@@ -7,13 +7,17 @@ namespace Bmd.Commands;
 /// <summary>bmd update — check for, and install, a newer release of bmd itself.</summary>
 public class UpdateCommands
 {
-    readonly ReleaseClient _client;
+    readonly Lazy<ReleaseClient> _client;
     readonly string _currentVersion;
     readonly string _runtimeIdentifier;
     readonly string? _executablePath;
 
+    /// <summary>Program.cs constructs one of these eagerly for every command, not just `update`,
+    /// so building the <see cref="ReleaseClient"/> — an <see cref="HttpClient"/> plus its
+    /// SocketsHttpHandler — has to wait until <see cref="Update"/> actually runs. Otherwise every
+    /// other command pays for a socket handler it never uses.</summary>
     public UpdateCommands()
-        : this(new ReleaseClient(ReleaseClient.CreateHttpClient(BuildInfo.Version)),
+        : this(() => new ReleaseClient(ReleaseClient.CreateHttpClient(BuildInfo.Version)),
                BuildInfo.Version, BuildInfo.RuntimeIdentifier, Environment.ProcessPath)
     {
     }
@@ -23,8 +27,16 @@ public class UpdateCommands
     /// the running test host.</summary>
     public UpdateCommands(ReleaseClient client, string currentVersion, string runtimeIdentifier,
         string? executablePath)
+        : this(() => client, currentVersion, runtimeIdentifier, executablePath)
     {
-        _client = client;
+    }
+
+    /// <summary>Test seam: observes whether/when <paramref name="createClient"/> actually runs, to
+    /// prove the client is built lazily rather than at construction time.</summary>
+    internal UpdateCommands(Func<ReleaseClient> createClient, string currentVersion,
+        string runtimeIdentifier, string? executablePath)
+    {
+        _client = new Lazy<ReleaseClient>(createClient);
         _currentVersion = currentVersion;
         _runtimeIdentifier = runtimeIdentifier;
         _executablePath = executablePath;
@@ -38,7 +50,7 @@ public class UpdateCommands
     {
         try
         {
-            var release = await _client.GetLatestReleaseAsync(ct);
+            var release = await _client.Value.GetLatestReleaseAsync(ct);
 
             if (!SemVer.TryParse(release.TagName, out var latest))
                 throw new UpdateException(
@@ -56,13 +68,15 @@ public class UpdateCommands
                         new UpdateCheckResult(current.ToString(), latest.ToString(), updateAvailable),
                         BmdJsonContext.Default.UpdateCheckResult));
                 else if (updateAvailable)
-                    Console.WriteLine($"A new release of bmd is available: {current} → {latest}{Environment.NewLine}Run `bmd update` to upgrade.");
+                    // UpdateNotice.Format owns this exact wording — the passive notice printed
+                    // after every other command uses the same copy, and duplicating it here in
+                    // a plain string let the two drift without either test noticing.
+                    Console.WriteLine(UpdateNotice.Format(current.ToString(), latest.ToString()));
                 else
                     Console.WriteLine($"bmd {current} is the latest version.");
                 return 0;
             }
 
-            // The install path lands in Task 5.
             if (!updateAvailable)
             {
                 if (json)
@@ -84,6 +98,16 @@ public class UpdateCommands
         catch (OperationCanceledException)
         {
             Console.Error.WriteLine("error: cancelled");
+            return 1;
+        }
+        catch (Exception ex)
+        {
+            // Backstop for the "no stack traces" rule: ReleaseClient and UpdateInstaller
+            // translate the failures they anticipate into UpdateException, but a few framework
+            // exceptions (e.g. an UnauthorizedAccessException from opening a file neither of
+            // them wraps) can still reach here. Without this, ConsoleAppFramework's own
+            // catch-all would print ex.ToString() — a full stack trace — to the user.
+            Console.Error.WriteLine($"error: {ex.Message}");
             return 1;
         }
     }
@@ -133,9 +157,9 @@ public class UpdateCommands
         {
             Progress(json, $"Downloading bmd {latest} ({assetName})...");
             var archivePath = Path.Combine(staging, assetName);
-            await _client.DownloadToFileAsync(asset.DownloadUrl, archivePath, ct);
+            await _client.Value.DownloadToFileAsync(asset.DownloadUrl, archivePath, ct);
 
-            var checksumsText = await _client.GetTextAsync(checksumsAsset.DownloadUrl, ct);
+            var checksumsText = await _client.Value.GetTextAsync(checksumsAsset.DownloadUrl, ct);
             if (!Checksums.TryFind(checksumsText, assetName, out var expected))
                 throw new UpdateException(
                     $"{ReleaseInfo.ChecksumsAssetName} for release {latest} lists no checksum for {assetName} — nothing was changed");

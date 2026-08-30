@@ -29,21 +29,21 @@ public class UpdateNoticeTests : IDisposable
     public void IsEligible_IsTrueForAnOrdinaryInteractiveCommand()
     {
         Assert.True(UpdateNotice.IsEligible(
-            ["videohub", "route", "list"], ConfigWith(null), errorIsRedirected: false));
+            ["videohub", "route", "list"], () => ConfigWith(null), errorIsRedirected: false));
     }
 
     [Fact]
     public void IsEligible_IsFalseWhenStderrIsNotATty()
     {
         Assert.False(UpdateNotice.IsEligible(
-            ["videohub", "route", "list"], ConfigWith(null), errorIsRedirected: true));
+            ["videohub", "route", "list"], () => ConfigWith(null), errorIsRedirected: true));
     }
 
     [Fact]
     public void IsEligible_IsFalseWhenJsonWasRequested()
     {
         Assert.False(UpdateNotice.IsEligible(
-            ["videohub", "route", "list", "--json"], ConfigWith(null), errorIsRedirected: false));
+            ["videohub", "route", "list", "--json"], () => ConfigWith(null), errorIsRedirected: false));
     }
 
     [Theory]
@@ -51,14 +51,14 @@ public class UpdateNoticeTests : IDisposable
     [InlineData("version")]
     public void IsEligible_IsFalseForTheUpdateAndVersionCommandsThemselves(string command)
     {
-        Assert.False(UpdateNotice.IsEligible([command], ConfigWith(null), errorIsRedirected: false));
+        Assert.False(UpdateNotice.IsEligible([command], () => ConfigWith(null), errorIsRedirected: false));
     }
 
     [Fact]
     public void IsEligible_IsFalseWhenUpdateCheckIsDisabledInConfig()
     {
         Assert.False(UpdateNotice.IsEligible(
-            ["videohub", "info"], ConfigWith("false"), errorIsRedirected: false));
+            ["videohub", "info"], () => ConfigWith("false"), errorIsRedirected: false));
     }
 
     [Theory]
@@ -68,14 +68,14 @@ public class UpdateNoticeTests : IDisposable
     public void IsEligible_IsTrueForAnythingThatIsNotFalse(string value)
     {
         Assert.True(UpdateNotice.IsEligible(
-            ["videohub", "info"], ConfigWith(value), errorIsRedirected: false));
+            ["videohub", "info"], () => ConfigWith(value), errorIsRedirected: false));
     }
 
     [Fact]
     public void IsEligible_IgnoresCaseWhenReadingFalse()
     {
         Assert.False(UpdateNotice.IsEligible(
-            ["videohub", "info"], ConfigWith("False"), errorIsRedirected: false));
+            ["videohub", "info"], () => ConfigWith("False"), errorIsRedirected: false));
     }
 
     [Fact]
@@ -123,7 +123,7 @@ public class UpdateNoticeTests : IDisposable
         var fetched = false;
 
         var runner = UpdateNoticeRunner.Start(
-            ["videohub", "info"], ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
+            ["videohub", "info"], () => ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
             _ => { fetched = true; return Task.FromResult<string?>("9.9.9"); }, now);
 
         var writer = new StringWriter();
@@ -140,7 +140,7 @@ public class UpdateNoticeTests : IDisposable
         var now = DateTimeOffset.UtcNow;
 
         var runner = UpdateNoticeRunner.Start(
-            ["videohub", "info"], ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
+            ["videohub", "info"], () => ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
             _ => Task.FromResult<string?>("1.4.1"), now);
 
         var writer = new StringWriter();
@@ -158,7 +158,7 @@ public class UpdateNoticeTests : IDisposable
         var cache = new UpdateCheckCache(Path.Combine(_directory, "update-check.json"));
 
         var runner = UpdateNoticeRunner.Start(
-            ["videohub", "info"], ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
+            ["videohub", "info"], () => ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
             _ => Task.FromException<string?>(new UpdateException("network down")),
             DateTimeOffset.UtcNow);
 
@@ -169,6 +169,67 @@ public class UpdateNoticeTests : IDisposable
         Assert.Null(cache.Read()); // a failed check writes nothing
     }
 
+    /// <summary>A writer standing in for a dead stderr handle — e.g. the console detached from a
+    /// parent process. Every member throws, matching the doc comment's "never throws" promise
+    /// for the actual write, not just the fetch.</summary>
+    sealed class FailingWriter : TextWriter
+    {
+        public override System.Text.Encoding Encoding => System.Text.Encoding.UTF8;
+        public override void WriteLine(string? value) => throw new IOException("the handle is invalid");
+    }
+
+    [Fact]
+    public void Runner_DoesNotThrowWhenTheWriterItselfFails()
+    {
+        var cache = new UpdateCheckCache(Path.Combine(_directory, "update-check.json"));
+        cache.Write(new UpdateCheckEntry("1.4.1", DateTimeOffset.UtcNow.AddHours(-1)));
+
+        var runner = UpdateNoticeRunner.Start(
+            ["videohub", "info"], () => ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
+            _ => Task.FromResult<string?>("9.9.9"), DateTimeOffset.UtcNow);
+
+        var exception = Record.Exception(() => runner.WriteIfAny(new FailingWriter()));
+
+        Assert.Null(exception);
+    }
+
+    [Fact]
+    public void IsEligible_NeverLoadsTheConfigWhenACheaperCheckAlreadyMakesItIneligible()
+    {
+        var loaded = false;
+        ConfigStore Load()
+        {
+            loaded = true;
+            return ConfigWith(null);
+        }
+
+        Assert.False(UpdateNotice.IsEligible(
+            ["videohub", "info", "--json"], Load, errorIsRedirected: false));
+        Assert.False(loaded);
+
+        Assert.False(UpdateNotice.IsEligible(
+            ["videohub", "info"], Load, errorIsRedirected: true));
+        Assert.False(loaded);
+
+        Assert.False(UpdateNotice.IsEligible(["update"], Load, errorIsRedirected: false));
+        Assert.False(loaded);
+    }
+
+    [Fact]
+    public void IsEligible_LoadsTheConfigOnlyOnceTheCheapChecksHavePassed()
+    {
+        var loaded = false;
+        ConfigStore Load()
+        {
+            loaded = true;
+            return ConfigWith(null);
+        }
+
+        Assert.True(UpdateNotice.IsEligible(["videohub", "info"], Load, errorIsRedirected: false));
+
+        Assert.True(loaded);
+    }
+
     [Fact]
     public void Runner_DoesNothingAtAllWhenIneligible()
     {
@@ -177,7 +238,7 @@ public class UpdateNoticeTests : IDisposable
         var fetched = false;
 
         var runner = UpdateNoticeRunner.Start(
-            ["videohub", "info", "--json"], ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
+            ["videohub", "info", "--json"], () => ConfigWith(null), cache, "1.2.0", errorIsRedirected: false,
             _ => { fetched = true; return Task.FromResult<string?>("9.9.9"); }, DateTimeOffset.UtcNow);
 
         var writer = new StringWriter();

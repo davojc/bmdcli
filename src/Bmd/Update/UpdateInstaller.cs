@@ -74,7 +74,18 @@ public static class UpdateInstaller
     /// Both paths must be on the same volume for the rename to be atomic, which is why callers
     /// extract into a directory beside the current executable rather than into the system temp
     /// directory.</summary>
-    public static void Replace(string newExecutablePath, string currentExecutablePath)
+    public static void Replace(string newExecutablePath, string currentExecutablePath) =>
+        Replace(newExecutablePath, currentExecutablePath, restoreMove: File.Move);
+
+    /// <summary>Test seam: <paramref name="restoreMove"/> stands in for the final "move .old back
+    /// onto the current path" step taken after a failed replacement. Production always passes
+    /// <see cref="File.Move(string, string, bool)"/> via the public overload above; a test can
+    /// substitute a throwing delegate to exercise the "restore itself also failed" branch, which
+    /// cannot be reached through real filesystem locks alone — the same file is renamed twice in
+    /// the sequence (current → .old, then .old → current), and Windows' share-mode check has no
+    /// way to allow the first rename but block the second on one held handle.</summary>
+    internal static void Replace(string newExecutablePath, string currentExecutablePath,
+        Action<string, string, bool> restoreMove)
     {
         if (!File.Exists(newExecutablePath))
             throw new UpdateException($"the extracted executable is missing from {newExecutablePath}");
@@ -86,7 +97,8 @@ public static class UpdateInstaller
                 UnixFileMode.UserRead | UnixFileMode.UserWrite | UnixFileMode.UserExecute |
                 UnixFileMode.GroupRead | UnixFileMode.GroupExecute |
                 UnixFileMode.OtherRead | UnixFileMode.OtherExecute);
-            Move(newExecutablePath, currentExecutablePath, overwrite: true);
+            Move(newExecutablePath, currentExecutablePath, overwrite: true,
+                $"could not install the new binary at {currentExecutablePath}");
             return;
         }
 
@@ -97,14 +109,16 @@ public static class UpdateInstaller
                 $"{old} is left over from an earlier update and could not be removed — close any running bmd and try again");
 
         var movedAside = File.Exists(currentExecutablePath);
-        if (movedAside) Move(currentExecutablePath, old, overwrite: false);
+        if (movedAside)
+            Move(currentExecutablePath, old, overwrite: false, $"could not move the current binary aside to {old}");
         try
         {
-            Move(newExecutablePath, currentExecutablePath, overwrite: false);
+            Move(newExecutablePath, currentExecutablePath, overwrite: false,
+                $"could not install the new binary at {currentExecutablePath}");
         }
         catch
         {
-            if (movedAside) TryRestore(old, currentExecutablePath);
+            if (movedAside) TryRestore(old, currentExecutablePath, restoreMove);
             throw;
         }
     }
@@ -115,7 +129,11 @@ public static class UpdateInstaller
     public static void CleanUpPreviousUpdate(string currentExecutablePath) =>
         TryDelete(currentExecutablePath + OldSuffix);
 
-    static void Move(string source, string destination, bool overwrite)
+    /// <summary><paramref name="failureDescription"/> says which half of the swap this call
+    /// represents — moving the outgoing binary aside, or moving the new one into place — so a
+    /// failure names the step that actually failed instead of a single generic "could not
+    /// install" that fits both.</summary>
+    static void Move(string source, string destination, bool overwrite, string failureDescription)
     {
         try
         {
@@ -128,13 +146,13 @@ public static class UpdateInstaller
         }
         catch (IOException ex)
         {
-            throw new UpdateException($"could not install the new binary at {destination}: {ex.Message}");
+            throw new UpdateException($"{failureDescription}: {ex.Message}");
         }
     }
 
-    static void TryRestore(string old, string currentExecutablePath)
+    static void TryRestore(string old, string currentExecutablePath, Action<string, string, bool> restoreMove)
     {
-        try { File.Move(old, currentExecutablePath, overwrite: false); }
+        try { restoreMove(old, currentExecutablePath, false); }
         catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
         {
             // The original is still on disk under its .old name; say so rather than pretend.

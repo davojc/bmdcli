@@ -166,6 +166,9 @@ public class ReleaseClientTests
                 () => ClientFor(handler).DownloadToFileAsync(url, destination, CancellationToken.None));
 
             Assert.DoesNotContain("Exception", ex.Message);
+            // The host answered and the connection dropped afterwards — that is a different
+            // claim than never having reached it, so it must not be worded as "could not reach".
+            Assert.DoesNotContain("could not reach", ex.Message);
             Assert.False(File.Exists(destination));
         }
         finally { if (File.Exists(destination)) File.Delete(destination); }
@@ -182,6 +185,30 @@ public class ReleaseClientTests
             () => ClientFor(handler).GetTextAsync(url, CancellationToken.None));
 
         Assert.DoesNotContain("Exception", ex.Message);
+        Assert.DoesNotContain("could not reach", ex.Message);
+    }
+
+    [Fact]
+    public async Task DownloadToFileAsync_ReportsALocalWriteFailureDistinctlyFromANetworkFailure()
+    {
+        const string url = "https://downloads.example.test/bmd-win-x64.zip";
+        var handler = new FakeHttpHandler().Bytes(url, [1, 2, 3]);
+        // A directory already sitting at the destination path makes File.Create fail with
+        // UnauthorizedAccessException — a local disk problem, never a network one, even though
+        // the host was reached and answered successfully.
+        var destination = Path.Combine(Path.GetTempPath(), $"bmd-dl-{Guid.NewGuid():N}");
+        Directory.CreateDirectory(destination);
+
+        try
+        {
+            var ex = await Assert.ThrowsAsync<UpdateException>(
+                () => ClientFor(handler).DownloadToFileAsync(url, destination, CancellationToken.None));
+
+            Assert.Contains("could not write", ex.Message);
+            Assert.Contains(destination, ex.Message);
+            Assert.DoesNotContain("could not reach", ex.Message);
+        }
+        finally { Directory.Delete(destination, recursive: true); }
     }
 
     [Fact]

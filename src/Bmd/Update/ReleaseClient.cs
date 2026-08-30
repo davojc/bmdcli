@@ -73,15 +73,50 @@ public sealed class ReleaseClient(HttpClient http, string apiBase = ReleaseClien
     /// <summary>Streams a URL to a file. On any failure — including one that happens mid-transfer,
     /// after some bytes have already landed on disk — the partial file is removed, so a caller can
     /// never mistake a truncated download for a complete one. The checksum would catch it anyway,
-    /// but leaving debris behind after a failed update is its own small bug.</summary>
+    /// but leaving debris behind after a failed update is its own small bug.
+    ///
+    /// A failure to write the bytes locally (permissions, a full disk) is reported as a local
+    /// write failure rather than "could not reach" the URL: the two have completely different
+    /// remedies, and conflating them sends a user with a full disk hunting for a network problem
+    /// they don't have. It is translated here, before the raw <see cref="IOException"/> ever
+    /// reaches <see cref="ExecuteAsync{T}"/>'s own translation for a dropped connection.</summary>
     public Task DownloadToFileAsync(string url, string destinationPath, CancellationToken ct) =>
         ExecuteAsync<object?>(url, DownloadTimeout, ct, async (response, linkedCt) =>
         {
             try
             {
                 await using var source = await response.Content.ReadAsStreamAsync(linkedCt);
-                await using (var destination = File.Create(destinationPath))
-                    await source.CopyToAsync(destination, linkedCt);
+
+                FileStream destination;
+                try
+                {
+                    destination = File.Create(destinationPath);
+                }
+                catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                {
+                    throw new UpdateException($"could not write the download to {destinationPath}: {ex.Message}");
+                }
+
+                await using (destination)
+                {
+                    var buffer = new byte[81920];
+                    int read;
+                    // A manual copy loop rather than Stream.CopyToAsync: reading from `source`
+                    // (the network) and writing to `destination` (local disk) can both throw
+                    // IOException, and only keeping them as separate calls lets a write failure
+                    // be told apart from a dropped connection.
+                    while ((read = await source.ReadAsync(buffer, linkedCt)) != 0)
+                    {
+                        try
+                        {
+                            await destination.WriteAsync(buffer.AsMemory(0, read), linkedCt);
+                        }
+                        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+                        {
+                            throw new UpdateException($"could not write the download to {destinationPath}: {ex.Message}");
+                        }
+                    }
+                }
             }
             catch
             {
@@ -104,9 +139,15 @@ public sealed class ReleaseClient(HttpClient http, string apiBase = ReleaseClien
     /// <paramref name="ct"/> (a real cancellation, left to propagate as-is so the caller can tell
     /// it apart from an update failure) versus the budget's own <see
     /// cref="CancellationTokenSource.CancelAfter(TimeSpan)"/> firing (translated into a timeout
-    /// message). Before this existed, only the header phase was translated; a connection dropped
-    /// while reading the body — by far the likelier failure for a multi-megabyte archive — escaped
-    /// as a raw <see cref="HttpRequestException"/> or <see cref="IOException"/>.</summary>
+    /// message).
+    ///
+    /// Connecting and reading the body are translated separately and worded differently: never
+    /// reaching <paramref name="url"/> at all is "could not reach", but a connection dropping
+    /// after the host already answered — by far the likelier failure for a multi-megabyte archive
+    /// — is a different claim, so it gets its own wording instead of being lumped in with "could
+    /// not reach". <paramref name="readBody"/> itself (see <see cref="DownloadToFileAsync"/>)
+    /// further separates a local disk failure from either of those by translating it to an
+    /// <see cref="UpdateException"/> before it ever reaches this method's own catch.</summary>
     async Task<T> ExecuteAsync<T>(string url, TimeSpan budget, CancellationToken ct,
         Func<HttpResponseMessage, CancellationToken, Task<T>> readBody)
     {
@@ -114,16 +155,14 @@ public sealed class ReleaseClient(HttpClient http, string apiBase = ReleaseClien
         budgetCts.CancelAfter(budget);
         var linkedCt = budgetCts.Token;
 
+        HttpResponseMessage response;
         try
         {
             // Checked explicitly rather than left to HttpClient/the handler to notice: a fake
             // handler in tests (or a real one that has already started work) is not guaranteed
             // to observe a token that was already cancelled before the call began.
             linkedCt.ThrowIfCancellationRequested();
-            using var response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, linkedCt);
-            if (!response.IsSuccessStatusCode)
-                throw new UpdateException($"{url} returned HTTP {(int)response.StatusCode}");
-            return await readBody(response, linkedCt);
+            response = await http.GetAsync(url, HttpCompletionOption.ResponseHeadersRead, linkedCt);
         }
         catch (Exception ex) when (ex is HttpRequestException or IOException)
         {
@@ -135,6 +174,26 @@ public sealed class ReleaseClient(HttpClient http, string apiBase = ReleaseClien
             // expiring, not a Ctrl+C — TaskCanceledException (thrown by HttpClient) derives from
             // OperationCanceledException, so this one filter covers both.
             throw new UpdateException($"timed out contacting {url}");
+        }
+
+        using (response)
+        {
+            if (!response.IsSuccessStatusCode)
+                throw new UpdateException($"{url} returned HTTP {(int)response.StatusCode}");
+
+            try
+            {
+                return await readBody(response, linkedCt);
+            }
+            catch (Exception ex) when (ex is HttpRequestException or IOException)
+            {
+                throw new UpdateException(
+                    $"the connection to {url} was interrupted before the response finished: {ex.Message}");
+            }
+            catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+            {
+                throw new UpdateException($"timed out contacting {url}");
+            }
         }
     }
 }

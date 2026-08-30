@@ -12,15 +12,21 @@ public static class UpdateNotice
     /// <summary>Whether this invocation may run a passive check and print a notice. The four
     /// suppression rules come straight from the spec: the notice is a courtesy for a human
     /// watching a terminal, so it stays out of pipes, out of machine-readable output, and out of
-    /// the two commands that already report versions themselves.</summary>
-    public static bool IsEligible(string[] args, ConfigStore config, bool errorIsRedirected)
+    /// the two commands that already report versions themselves.
+    ///
+    /// <paramref name="loadConfig"/> is called only after the three cheap, config-free checks
+    /// above it have all passed — loading the effective config means parsing the global config
+    /// file and walking up the directory tree for a local <c>.bmdconfig</c>, and every other
+    /// invocation (piped, --json, `update`/`version`) should never pay for that just to be told
+    /// no.</summary>
+    public static bool IsEligible(string[] args, Func<ConfigStore> loadConfig, bool errorIsRedirected)
     {
         if (errorIsRedirected) return false;
         if (args.Contains("--json", StringComparer.Ordinal)) return false;
         if (args.Length > 0 && args[0] is "update" or "version") return false;
 
         if (!ConfigKey.TryParse(ConfigKeyName, out var key)) return false;
-        var configured = config.GetEffective(key);
+        var configured = loadConfig().GetEffective(key);
         return configured is null || !configured.Equals("false", StringComparison.OrdinalIgnoreCase);
     }
 

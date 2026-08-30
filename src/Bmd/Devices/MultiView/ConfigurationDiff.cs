@@ -1,6 +1,6 @@
-using Bmd.Devices.MultiView;
+using Bmd.Devices.Videohub;
 
-namespace Bmd.Devices.Videohub;
+namespace Bmd.Devices.MultiView;
 
 /// <summary>One CONFIGURATION property whose two observed values differ, as already-formatted
 /// display strings ("true"/"false" for booleans, "(unset)" for a value neither side reported).

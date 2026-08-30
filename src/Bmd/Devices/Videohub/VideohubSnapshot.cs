@@ -11,7 +11,14 @@ public sealed record SnapshotOutput(int N, string Label, int Input);
 /// <summary>A MultiView's CONFIGURATION at export time. Absent on a Videohub, and absent from
 /// every snapshot written before this existed — which is why it is last and optional.
 /// Every property is nullable so "the device never reported this" stays distinguishable from
-/// "the device reported false".</summary>
+/// "the device reported false".
+///
+/// This record stays in <c>Devices/Videohub/</c> rather than moving alongside
+/// <see cref="MultiViewConfiguration"/> (see <c>Devices/MultiView/ConfigurationDiff.cs</c>): it
+/// is part of <see cref="VideohubSnapshot"/>'s own on-disk file schema, and that snapshot type is
+/// shared by both device groups (`videohub export`/`restore` and `multiview export`/`restore`
+/// both read and write it) — so it belongs with the schema it serializes, not with either
+/// device's own vocabulary.</summary>
 public sealed record SnapshotConfiguration(
     string? Layout, string? OutputFormat, bool? SoloEnabled, bool? WidescreenSdEnabled,
     bool? DisplayBorder, bool? DisplayLabels, bool? DisplayAudioMeters, bool? DisplaySdiTally,

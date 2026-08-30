@@ -6,3 +6,5 @@ obj/
 artifacts/
 TestResults/
 .bmdconfig
+.worktrees/
+.superpowers/

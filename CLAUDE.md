@@ -2,6 +2,10 @@
 
 Cross-platform .NET CLI for controlling Blackmagic Design devices over the
 network, gh/git-style (`bmd videohub route set 3 7`). First device: Videohub.
+Second device: MultiView (`bmd multiview view set 1 3`) — it speaks the same
+Videohub Ethernet Protocol, so it shares the client and session plumbing;
+what differs is vocabulary (views, not outputs) and its own CONFIGURATION
+block (layout, output format, overlays, solo).
 Design spec: `docs/superpowers/specs/2026-08-29-bmd-cli-design.md` — read it
 before architectural changes; update it when a design decision changes.
 
@@ -86,6 +90,7 @@ dotnet publish src/Bmd -c Release -r win-x64          # AOT binary (also: linux-
 Milestones (detail in spec): 1 skeleton+config ✅ → 2 read path + agent JSON ✅
 → 3 export + backup store → 4 write path (with auto-backup) → 5 restore →
 6 watch → 7 mDNS discovery → 8 tag-driven release pipeline + Pages site →
-9 self-update ✅. Future devices:
+9 self-update ✅ → 10 MultiView (second device: `bmd multiview`, discovery,
+site guide) ✅. Future devices:
 HyperDeck (text/TCP), ATEM (binary/UDP) — each gets `Commands/<Device>/` +
 `Devices/<Device>/` mirroring Videohub.

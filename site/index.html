@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bmd</title>
-<meta name="description" content="bmd — command-line control for Blackmagic Videohub routers. A single native binary, no dependencies.">
+<meta name="description" content="bmd — command-line control for Blackmagic Videohub routers and MultiView units. A single native binary, no dependencies.">
 <meta name="theme-color" content="#0c0d10">
 <link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTQnIGZpbGw9JyNmMjU0MmQnLz48dGV4dCB4PSczMicgeT0nNDUnIGZvbnQtZmFtaWx5PSdtb25vc3BhY2UnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9JyMwYzBkMTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnPiZndDtfPC90ZXh0Pjwvc3ZnPg==">
 <link rel="stylesheet" href="style.css">
@@ -20,19 +20,21 @@
         <h1>bmd</h1>
         <p class="tagline">Route video from the command line.</p>
         <p class="lede">
-          One native binary for Blackmagic Videohub routers. Nothing to install
-          alongside it, no runtime, no SDK. Every command documents itself and
-          every command speaks <code>--json</code>, so operators and agents drive
-          exactly the same tool.
+          One native binary for Blackmagic Videohub routers and MultiView units.
+          Nothing to install alongside it, no runtime, no SDK. Every command
+          documents itself and every command speaks <code>--json</code>, so
+          operators and agents drive exactly the same tool.
         </p>
 
         <div class="cta-row">
           <a class="btn btn-primary" href="#download">Download</a>
           <a class="btn" href="videohub.html">Videohub guide</a>
+          <a class="btn" href="multiview.html">MultiView guide</a>
         </div>
 
         <ul class="status-list">
           <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> Videohub — routing, labels, locks, backups, live watch.</li>
+          <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> MultiView — views, layout, format, overlays, solo, backups, live watch.</li>
           <li class="status-pending"><span class="status-dot" aria-hidden="true">…</span> HyperDeck and ATEM — not implemented yet.</li>
         </ul>
       </div>
@@ -200,6 +202,14 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
         <dd>Find Blackmagic devices on the local network.</dd>
       </div>
       <div>
+        <dt>bmd multiview view set 1 3</dt>
+        <dd>Put source 3 in view 1 of a MultiView — destination first, then source. See the <a href="multiview.html">MultiView guide</a> for the rest of that command group.</dd>
+      </div>
+      <div>
+        <dt>bmd multiview layout 2x2</dt>
+        <dd>Set the window layout; <code>format</code> sets the output video format the same way. The device validates the value, not bmd.</dd>
+      </div>
+      <div>
         <dt>--json</dt>
         <dd>On any command. One JSON document on stdout with stable field names, so scripts and agents can read it.</dd>
       </div>
@@ -219,8 +229,10 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
     <div class="guide-callout">
       <p>
         This page only shows a slice of what <code>bmd</code> does. The
-        <a href="videohub.html"><strong>Videohub guide</strong></a> covers every command,
-        the backup/restore workflow, scripting with <code>--json</code>, and troubleshooting.
+        <a href="videohub.html"><strong>Videohub guide</strong></a> and the
+        <a href="multiview.html"><strong>MultiView guide</strong></a> each cover every command in
+        their group, the backup/restore workflow, scripting with <code>--json</code>, and
+        troubleshooting.
       </p>
     </div>
   </section>
@@ -228,6 +240,7 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
   <footer>
     <p>
       <a href="videohub.html">Videohub guide</a>
+      · <a href="multiview.html">MultiView guide</a>
       · <a href="install.html">Install &amp; verify</a>
       · <a href="https://github.com/davojc/bmdcli">Source on GitHub</a>
       · <a href="https://github.com/davojc/bmdcli/blob/main/LICENSE">MIT licensed</a>

@@ -27,23 +27,28 @@ public sealed record DiscoveredDevice(
 /// <summary>Maps a device's mDNS TXT <c>class=</c> value to the bmd device group it belongs to.</summary>
 public static class DeviceClasses
 {
-    /// <summary>The mDNS TXT <c>class=</c> values we believe Blackmagic Videohub models report.
-    /// <para><b>This list is unverified against real hardware.</b> Blackmagic does not publish
-    /// the set of <c>class=</c> values its devices advertise; these are seed values based on
-    /// observation, not a specification. Run <c>bmd discover --all</c> against real devices on
-    /// the network to see the actual classes present and refine this table.</para></summary>
-    public static IReadOnlyList<string> KnownVideohubClasses { get; } = ["Videohub", "SmartVideohub", "VideoHub"];
+    /// <summary>mDNS TXT <c>class=</c> values mapped to the bmd device group that handles them.
+    /// <para><c>Videohub</c> and <c>MultiView</c> are <b>confirmed against real hardware</b>
+    /// (a Smart Videohub 40x40 and a MultiView 4). The remaining Videohub spellings are seed
+    /// values based on observation, not a specification — Blackmagic does not publish this set.
+    /// <c>AtemSwitcher</c> was also observed on the network but is deliberately absent here: bmd
+    /// cannot control an ATEM, and mapping it would offer to configure a device it can't drive.
+    /// Run <c>bmd discover --all</c> against real devices to refine the table.</para></summary>
+    static readonly KeyValuePair<string, string>[] ClassMap =
+    [
+        new("Videohub", "videohub"),
+        new("SmartVideohub", "videohub"),
+        new("VideoHub", "videohub"),
+        new("MultiView", "multiview"),
+    ];
 
     /// <summary>Case-insensitive lookup of the bmd device group for a device class.
-    /// Returns <c>"videohub"</c> when <paramref name="deviceClass"/> matches one of
-    /// <see cref="KnownVideohubClasses"/>, otherwise <c>null</c> — never a guess.</summary>
+    /// Returns null for anything not in the table — never a guess.</summary>
     public static string? DeviceTypeFor(string deviceClass)
     {
-        foreach (var known in KnownVideohubClasses)
-        {
-            if (string.Equals(known, deviceClass, StringComparison.OrdinalIgnoreCase))
-                return "videohub";
-        }
+        foreach (var (advertised, group) in ClassMap)
+            if (string.Equals(advertised, deviceClass, StringComparison.OrdinalIgnoreCase))
+                return group;
         return null;
     }
 }

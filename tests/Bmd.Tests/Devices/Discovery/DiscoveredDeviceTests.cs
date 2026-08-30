@@ -141,6 +141,29 @@ public class DiscoveredDeviceTests
         Assert.Equal(expected, DeviceClasses.DeviceTypeFor(deviceClass));
     }
 
+    [Theory]
+    [InlineData("MultiView", "multiview")]
+    [InlineData("multiview", "multiview")]
+    [InlineData("MULTIVIEW", "multiview")]
+    public void DeviceTypeFor_RecognisesTheMultiViewClass(string advertised, string expected)
+    {
+        // Verified against a real MultiView 4, which advertises class=MultiView.
+        Assert.Equal(expected, DeviceClasses.DeviceTypeFor(advertised));
+    }
+
+    [Fact]
+    public void DeviceTypeFor_StillRecognisesVideohub()
+    {
+        Assert.Equal("videohub", DeviceClasses.DeviceTypeFor("Videohub"));
+    }
+
+    [Fact]
+    public void DeviceTypeFor_DoesNotGuessAtAtem()
+    {
+        // Observed on the network but unsupported; discovery must not offer to configure it.
+        Assert.Null(DeviceClasses.DeviceTypeFor("AtemSwitcher"));
+    }
+
     [Fact]
     public void FromRecords_TxtEntries_AreSurfacedVerbatimInAdvertisedOrder()
     {

@@ -1,0 +1,231 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bmd — MultiView guide</title>
+<meta name="description" content="A practical, complete guide to controlling a Blackmagic MultiView with bmd: connecting, sources and views, routing, layout and format, overlays, solo, backups, restore, and watch.">
+<meta name="theme-color" content="#0c0d10">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTQnIGZpbGw9JyNmMjU0MmQnLz48dGV4dCB4PSczMicgeT0nNDUnIGZvbnQtZmFtaWx5PSdtb25vc3BhY2UnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9JyMwYzBkMTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnPiZndDtfPC90ZXh0Pjwvc3ZnPg==">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <header class="guide-header">
+    <p class="back-link"><a href="index.html">&larr; bmd</a></p>
+    <h1>The MultiView guide</h1>
+    <p class="tagline">Everything <code>bmd multiview</code> does, written for someone who has never used it.</p>
+  </header>
+
+  <nav class="page-nav" aria-label="Sections">
+    <ol>
+      <li><a href="#connecting">1. Connecting</a></li>
+      <li><a href="#sources-and-views">2. Sources and views</a></li>
+      <li><a href="#routing">3. Routing</a></li>
+      <li><a href="#layout-and-format">4. Layout and format</a></li>
+      <li><a href="#overlays-and-behaviour">5. Overlays and behaviour</a></li>
+      <li><a href="#solo">6. Solo</a></li>
+      <li><a href="#backups-export-restore">7. Backups, export and restore</a></li>
+      <li><a href="#watching">8. Watching</a></li>
+    </ol>
+  </nav>
+
+  <section id="connecting">
+    <h2>1. Connecting</h2>
+    <p>
+      A MultiView speaks the same protocol as a Videohub, over the same TCP port, so connecting to
+      one works exactly the same way. The easiest way to get an address is to ask the network:
+    </p>
+    <pre class="cmd"><code>bmd discover --add</code></pre>
+    <p>
+      This lists the recognized Blackmagic devices it hears on the local network and lets you pick
+      one from a numbered list — a MultiView shows up with type <code>multiview</code>, right
+      alongside any Videohubs on the same segment. Picking one writes its address (and port, if not
+      the default 9990) into config, under the <code>multiview.</code> prefix rather than
+      <code>videohub.</code>, so the two device types never collide in the same config file.
+    </p>
+    <p>
+      If you already know the address — or discovery can't reach the device — set it directly:
+    </p>
+    <pre class="cmd"><code>bmd config set multiview.host 192.168.1.60</code></pre>
+    <p>
+      Every <code>bmd multiview</code> command also accepts its own <code>--host</code>,
+      <code>--port</code>, and <code>--timeout</code>, which is convenient for one-off use against a
+      unit you haven't configured at all. See the
+      <a href="videohub.html#connecting">Videohub guide's connecting section</a> for how config
+      layering (local <code>.bmdconfig</code>, global config, command-line flag) works — it's
+      identical here.
+    </p>
+  </section>
+
+  <section id="sources-and-views">
+    <h2>2. Sources and views</h2>
+    <p>
+      A MultiView takes several video sources in and shows them as small windows on one big output
+      — that output is what bmd calls a <strong>view</strong>. Every number bmd shows you is
+      1-based, matching the numbering on the device's own front panel.
+    </p>
+    <pre class="cmd"><code>bmd multiview info</code></pre>
+    <pre class="cmd cmd-out"><code>Model:          Blackmagic MultiView 4
+Protocol:       2.8
+Inputs:         8
+Views:          6
+Layout:         2x2
+Output format:  1080i5994</code></pre>
+    <pre class="cmd"><code>bmd multiview input list</code></pre>
+    <pre class="cmd cmd-out"><code>N   LABEL
+1   Camera 1
+2   Camera 2
+3   Switcher PGM
+4   Switcher PVW
+…</code></pre>
+    <pre class="cmd"><code>bmd multiview view list</code></pre>
+    <pre class="cmd cmd-out"><code>VIEW  LABEL       IN  SOURCE        LOCK
+1     Window 1    1   Camera 1      unlocked
+2     Window 2    2   Camera 2      unlocked
+3     Window 3    3   Switcher PGM  unlocked
+4     Window 4    4   Switcher PVW  unlocked
+5     Solo        1   Camera 1      unlocked
+6     Audio       1   Camera 1      unlocked</code></pre>
+    <p>
+      <strong>On a MultiView 4, that last part is worth stating plainly: views 5 and 6 are not
+      windows at all.</strong> They are the Solo output (what's shown full-screen when solo mode is
+      on — see <a href="#solo">Solo</a> below) and the Audio output. Only views 1–4 are the actual
+      quad-split windows on the multiview display. bmd numbers all six the same way the device does,
+      so <code>view list</code> shows every one of them, but a script that assumes "view" always
+      means "window" will be surprised on this model.
+    </p>
+  </section>
+
+  <section id="routing">
+    <h2>3. Routing</h2>
+    <p>To put a source in a view, name the view first, then the source:</p>
+    <pre class="cmd"><code>bmd multiview view set &lt;view&gt; &lt;input&gt;</code></pre>
+    <p>
+      For example, <code>bmd multiview view set 1 3</code> puts source 3 in view 1 — destination
+      first, then source, the same convention as <code>videohub route set</code>. Both numbers are
+      1-based and validated against the device's real source/view count before anything is sent.
+    </p>
+    <p>Renaming a source or a view works the same way, with the new label as the last argument:</p>
+    <pre class="cmd"><code>bmd multiview input rename &lt;input&gt; &lt;label&gt;
+bmd multiview view rename &lt;view&gt; &lt;label&gt;</code></pre>
+    <p>Locking a view stops other controllers from changing its source (or taking the lock from you) without <code>--force</code>:</p>
+    <pre class="cmd"><code>bmd multiview view lock &lt;view&gt;
+bmd multiview view unlock &lt;view&gt;
+bmd multiview view unlock &lt;view&gt; --force</code></pre>
+    <p>
+      All of this behaves exactly like the equivalent Videohub commands — see the
+      <a href="videohub.html#changing-routes">Videohub guide's changing routes section</a> for the
+      details on labels, locks, and what a rejection looks like.
+    </p>
+  </section>
+
+  <section id="layout-and-format">
+    <h2>4. Layout and format</h2>
+    <p>Two more properties live on the device rather than per-view: the window layout, and the output video format.</p>
+    <pre class="cmd"><code>bmd multiview layout 2x2
+bmd multiview format 1080i5994</code></pre>
+    <p>
+      <strong>bmd does not validate either value.</strong> Blackmagic does not document this
+      protocol block, and which layouts and formats are actually valid differs by MultiView model
+      and firmware — bmd has no table to check against, so it sends whatever you give it and the
+      device decides. <code>2x2</code> and <code>1080i5994</code> above are examples observed
+      against a real MultiView 4, not an exhaustive list of what your unit accepts. If the device
+      rejects a value, bmd reports what it said rather than guessing at a friendlier message:
+    </p>
+    <pre class="cmd cmd-out"><code>error: device rejected CONFIGURATION (Layout: 9x9)</code></pre>
+    <p>Trial and error against the actual unit — or its manual, if Blackmagic's documents the block for your model — is the only reliable way to know what it accepts.</p>
+  </section>
+
+  <section id="overlays-and-behaviour">
+    <h2>5. Overlays and behaviour</h2>
+    <p>Four on-screen overlays can each be turned on or off independently:</p>
+    <pre class="cmd"><code>bmd multiview show borders on
+bmd multiview show labels on
+bmd multiview show audio-meters on
+bmd multiview show tally on</code></pre>
+    <p>The setting name comes first, then <code>on</code> or <code>off</code>. Two more standalone toggles round out the device's behaviour:</p>
+    <pre class="cmd"><code>bmd multiview take-mode on
+bmd multiview widescreen-sd on</code></pre>
+    <p>
+      Take mode holds a requested change until it's confirmed rather than cutting immediately;
+      widescreen SD only affects how standard-definition sources are displayed. Unlike layout and
+      format, bmd does validate these: the value must be exactly <code>on</code> or <code>off</code>,
+      since that much is unambiguous regardless of model or firmware.
+    </p>
+  </section>
+
+  <section id="solo">
+    <h2>6. Solo</h2>
+    <p>Solo shows one source full-screen on the Solo output instead of the usual quad-split view:</p>
+    <pre class="cmd"><code>bmd multiview solo 3
+bmd multiview solo off</code></pre>
+    <p>
+      Giving a source number both points the Solo output at that source and enables solo mode;
+      <code>off</code> leaves solo mode and does not otherwise change any routing. bmd routes the
+      source to the Solo view before enabling solo, so by the time solo mode is on, the right
+      picture is already showing.
+    </p>
+  </section>
+
+  <section id="backups-export-restore">
+    <h2>7. Backups, export and restore</h2>
+    <p>
+      Every command that changes the device — <code>view set</code>, the two <code>rename</code>
+      commands, <code>view lock</code>/<code>unlock</code>, <code>layout</code>, <code>format</code>,
+      <code>solo</code>, <code>show</code>, <code>take-mode</code>, <code>widescreen-sd</code>, and
+      <code>restore</code> — snapshots the device first and reports where the snapshot went, the
+      same way <code>bmd videohub</code> does. See the
+      <a href="videohub.html#backups">Videohub guide's backups section</a> for where those files
+      live and the <code>backup.*</code> config keys that control them.
+    </p>
+    <p>
+      <code>export</code> and <code>restore</code> work the same way too, with one MultiView-specific
+      difference: the snapshot also captures the device's <strong>configuration</strong> — layout,
+      output format, and every overlay/behaviour toggle — alongside labels and routing, since that's
+      state a MultiView has and a plain router doesn't.
+    </p>
+    <pre class="cmd"><code>bmd multiview export before.json
+bmd multiview restore before.json --dry-run
+bmd multiview restore before.json</code></pre>
+    <p>
+      As with <code>videohub restore</code>, <code>--dry-run</code> shows what would change without
+      touching the device, and restore only ever changes what actually differs — a snapshot taken
+      before configuration was captured (an older Videohub-era file, or one from a plain
+      <code>videohub export</code>) simply leaves configuration untouched on restore. See the
+      <a href="videohub.html#event-workflow">Videohub guide's event workflow section</a> for the
+      rest of the behaviour: verification on export, and safe re-running on a failed restore.
+    </p>
+  </section>
+
+  <section id="watching">
+    <h2>8. Watching</h2>
+    <p>
+      Like a Videohub, a MultiView can be changed by other controllers at any time —
+      <code>watch</code> streams every change as it happens, no matter who made it:
+    </p>
+    <pre class="cmd"><code>bmd multiview watch</code></pre>
+    <pre class="cmd cmd-out"><code>view 1: Camera 1 → Camera 2
+view 3 label: 'Window 3' → 'PGM Preview'
+view 5 lock: unlocked → owned</code></pre>
+    <p>
+      It runs until you stop it with Ctrl+C, or the connection drops, and (like every command)
+      accepts <code>--json</code> — see the
+      <a href="videohub.html#scripting">Videohub guide's scripting and agents section</a> for the
+      JSON Lines shape and the exit-code contract, both identical here.
+    </p>
+  </section>
+
+  <footer>
+    <p>
+      <a href="index.html">&larr; Back to bmd</a>
+      · <a href="videohub.html">Videohub guide</a>
+      · <a href="install.html">Install &amp; verify</a>
+      · <a href="https://github.com/davojc/bmdcli">Source on GitHub</a>
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

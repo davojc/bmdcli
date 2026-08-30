@@ -13,3 +13,12 @@ public sealed record MultiViewViewEntry(int N, string Label, int Input, string I
 
 /// <summary>One CONFIGURATION property, named exactly as the device spelled it.</summary>
 public sealed record MultiViewConfigEntry(string Name, string Value);
+
+public sealed record MultiViewRouteSetResult(
+    int View, string ViewLabel, int Input, string InputLabel, string? Backup);
+
+/// <summary>Kind is "input" or "view", so one record covers both renames.</summary>
+public sealed record MultiViewRenameResult(
+    string Kind, int N, string OldLabel, string NewLabel, string? Backup);
+
+public sealed record MultiViewLockResult(int View, string ViewLabel, string Lock, string? Backup);

@@ -37,6 +37,11 @@ app.Add("multiview info", multiview.Info);
 app.Add("multiview input list", multiview.InputList);
 app.Add("multiview view list", multiview.ViewList);
 app.Add("multiview config", multiview.Config);
+app.Add("multiview view set", multiview.ViewSet);
+app.Add("multiview input rename", multiview.InputRename);
+app.Add("multiview view rename", multiview.ViewRename);
+app.Add("multiview view lock", multiview.ViewLock);
+app.Add("multiview view unlock", multiview.ViewUnlock);
 
 var discover = new DiscoverCommands();
 app.Add("discover", discover.Discover);

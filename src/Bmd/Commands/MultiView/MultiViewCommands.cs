@@ -3,6 +3,7 @@ using Bmd.Config;
 using Bmd.Devices.MultiView;
 using Bmd.Devices.Videohub;
 using Bmd.Output;
+using ConsoleAppFramework;
 
 namespace Bmd.Commands.MultiView;
 
@@ -123,6 +124,166 @@ public class MultiViewCommands
             {
                 Table.Write(["SETTING", "VALUE"],
                     config.Raw.Select(p => (IReadOnlyList<string>)[p.Key, p.Value]).ToArray());
+            }
+            return 0;
+        });
+
+    /// <summary>Range check shared by every command taking a view or source number. Returns an
+    /// error message, or null when the value is in range. 1-based throughout, matching the
+    /// device's own front panel.</summary>
+    static string? OutOfRange(string noun, int value, int count) =>
+        value >= 1 && value <= count ? null : $"{noun} must be between 1 and {count}, not {value}";
+
+    /// <summary>Put a source in a view. Argument order is destination first, then source — view
+    /// then input, matching `videohub route set &lt;output&gt; &lt;input&gt;` and the device's own
+    /// front-panel convention. Both numbers are 1-based. On a MultiView 4, views 5 and 6 are the
+    /// Solo and Audio inputs rather than windows.</summary>
+    /// <param name="view">Destination: which view to change (1-based).</param>
+    /// <param name="input">Source: which input to show in it (1-based).</param>
+    /// <param name="host">Device address; defaults to config multiview.host.</param>
+    /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup. Not recommended.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> ViewSet(
+        [Argument] int view, [Argument] int input,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        {
+            var state = client.State;
+            if (OutOfRange("view", view, state.Device.VideoOutputs) is { } viewError)
+            {
+                Console.Error.WriteLine($"error: {viewError}");
+                return 2;
+            }
+            if (OutOfRange("input", input, state.Device.VideoInputs) is { } inputError)
+            {
+                Console.Error.WriteLine($"error: {inputError}");
+                return 2;
+            }
+
+            await client.SetRouteAsync(view, input);
+
+            var result = new MultiViewRouteSetResult(
+                view, state.GetOutputLabel(view), input, state.GetInputLabel(input), backup);
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(result, BmdJsonContext.Default.MultiViewRouteSetResult));
+            else
+            {
+                Console.WriteLine($"view {view} ({result.ViewLabel}) ← input {input} ({result.InputLabel})");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+
+    /// <summary>Rename a source (1-based) on the device itself, so its label matches on the front panel and in other controllers.</summary>
+    /// <param name="input">Which source to rename (1-based).</param>
+    /// <param name="label">The new label.</param>
+    /// <param name="host">Device address; defaults to config multiview.host.</param>
+    /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup. Not recommended.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> InputRename(
+        [Argument] int input, [Argument] string label,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => RenameAsync("input", input, label, host, port, timeout, noBackup, json);
+
+    /// <summary>Rename a view (1-based) on the device itself.</summary>
+    /// <param name="view">Which view to rename (1-based).</param>
+    /// <param name="label">The new label.</param>
+    /// <param name="host">Device address; defaults to config multiview.host.</param>
+    /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup. Not recommended.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> ViewRename(
+        [Argument] int view, [Argument] string label,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => RenameAsync("view", view, label, host, port, timeout, noBackup, json);
+
+    Task<int> RenameAsync(
+        string kind, int n, string label,
+        string? host, int? port, int? timeout, bool noBackup, bool json)
+        => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        {
+            var state = client.State;
+            var isInput = kind == "input";
+            var count = isInput ? state.Device.VideoInputs : state.Device.VideoOutputs;
+            if (OutOfRange(kind, n, count) is { } error)
+            {
+                Console.Error.WriteLine($"error: {error}");
+                return 2;
+            }
+
+            var old = isInput ? state.GetInputLabel(n) : state.GetOutputLabel(n);
+            if (isInput) await client.RenameInputAsync(n, label);
+            else await client.RenameOutputAsync(n, label);
+
+            var result = new MultiViewRenameResult(kind, n, old, label, backup);
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(result, BmdJsonContext.Default.MultiViewRenameResult));
+            else
+            {
+                Console.WriteLine($"{kind} {n}: {old} → {label}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+
+    /// <summary>Take the lock on a view (1-based), preventing other controllers from changing its source or taking it over without --force.</summary>
+    /// <param name="view">Which view to lock (1-based).</param>
+    /// <param name="host">Device address; defaults to config multiview.host.</param>
+    /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup. Not recommended.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> ViewLock(
+        [Argument] int view,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => LockAsync(view, force: false, unlock: false, host, port, timeout, noBackup, json);
+
+    /// <summary>Release the lock on a view (1-based). Without --force, releasing a lock held by another controller is left to the device to accept or refuse.</summary>
+    /// <param name="view">Which view to unlock (1-based).</param>
+    /// <param name="force">Clear a lock held by another controller.</param>
+    /// <param name="host">Device address; defaults to config multiview.host.</param>
+    /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup. Not recommended.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> ViewUnlock(
+        [Argument] int view, bool force = false,
+        string? host = null, int? port = null, int? timeout = null,
+        bool noBackup = false, bool json = false)
+        => LockAsync(view, force, unlock: true, host, port, timeout, noBackup, json);
+
+    Task<int> LockAsync(
+        int view, bool force, bool unlock,
+        string? host, int? port, int? timeout, bool noBackup, bool json)
+        => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
+        {
+            var state = client.State;
+            if (OutOfRange("view", view, state.Device.VideoOutputs) is { } error)
+            {
+                Console.Error.WriteLine($"error: {error}");
+                return 2;
+            }
+
+            if (unlock) await client.UnlockOutputAsync(view, force);
+            else await client.LockOutputAsync(view);
+
+            var word = unlock ? "unlocked" : "locked";
+            var result = new MultiViewLockResult(view, state.GetOutputLabel(view), word, backup);
+            if (json)
+                Console.WriteLine(JsonSerializer.Serialize(result, BmdJsonContext.Default.MultiViewLockResult));
+            else
+            {
+                Console.WriteLine($"view {view} ({result.ViewLabel}): {word}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
             }
             return 0;
         });

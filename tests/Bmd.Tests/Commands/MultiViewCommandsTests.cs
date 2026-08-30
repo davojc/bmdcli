@@ -173,4 +173,133 @@ public class MultiViewCommandsTests : IDisposable
         Assert.Equal(1, exit);
         Assert.Contains("bmd config set multiview.host", _stderr.ToString());
     }
+
+    [Fact]
+    public async Task Info_DegradesGracefullyWhenTheDeviceSendsNoConfigurationBlock()
+    {
+        // A plain Videohub answered on the multiview address: Info must still succeed,
+        // just without the layout/output-format lines that come from CONFIGURATION.
+        await using var device = FakeVideohub.Start(Fixtures.Dump4x4);
+
+        var exit = await Commands().Info("127.0.0.1", device.Port);
+
+        Assert.Equal(0, exit);
+        var text = _stdout.ToString();
+        Assert.Contains("Model:", text);
+        Assert.DoesNotContain("Layout:", text);
+        Assert.DoesNotContain("Output format:", text);
+    }
+
+    [Fact]
+    public async Task ViewSet_PutsASourceInAViewAndReportsTheChange()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        var exit = await Commands().ViewSet(1, 3, "127.0.0.1", device.Port);
+
+        Assert.Equal(0, exit);
+        Assert.Equal(2, device.Routes()[0]);          // 1-based view 1 → 0-based input index 2
+        var text = _stdout.ToString();
+        Assert.Contains("View 1", text);
+        Assert.Contains("Presenter", text);
+    }
+
+    [Fact]
+    public async Task ViewSet_Json_ReportsTheViewAndItsBackupPath()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        var exit = await Commands().ViewSet(2, 4, "127.0.0.1", device.Port, json: true);
+
+        Assert.Equal(0, exit);
+        var lines = _stdout.ToString().Split('\n', StringSplitOptions.RemoveEmptyEntries);
+        Assert.Single(lines);
+        using var doc = JsonDocument.Parse(lines[0]);
+        Assert.Equal(2, doc.RootElement.GetProperty("view").GetInt32());
+        Assert.Equal(4, doc.RootElement.GetProperty("input").GetInt32());
+        Assert.Equal("Confidence", doc.RootElement.GetProperty("inputLabel").GetString());
+        Assert.False(string.IsNullOrWhiteSpace(doc.RootElement.GetProperty("backup").GetString()));
+    }
+
+    [Fact]
+    public async Task ViewSet_RejectsAViewNumberOutsideTheDeviceWithExitTwo()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+
+        var exit = await Commands().ViewSet(7, 1, "127.0.0.1", device.Port);
+
+        Assert.Equal(2, exit);
+        Assert.Contains("view", _stderr.ToString());
+        Assert.Contains("1", _stderr.ToString());
+        Assert.Contains("6", _stderr.ToString());
+    }
+
+    [Fact]
+    public async Task ViewSet_RejectsASourceNumberOutsideTheDeviceWithExitTwo()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+
+        var exit = await Commands().ViewSet(1, 9, "127.0.0.1", device.Port);
+
+        Assert.Equal(2, exit);
+        Assert.Contains("input", _stderr.ToString());
+    }
+
+    [Fact]
+    public async Task ViewRename_ChangesTheWindowLabel()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        var exit = await Commands().ViewRename(1, "Programme", "127.0.0.1", device.Port);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("Programme", device.OutputLabels()[0]);
+    }
+
+    [Fact]
+    public async Task InputRename_ChangesTheSourceLabel()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        var exit = await Commands().InputRename(2, "Desk Feed", "127.0.0.1", device.Port);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("Desk Feed", device.InputLabels()[1]);
+    }
+
+    [Fact]
+    public async Task ViewLock_ThenUnlock_RoundTrips()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        Assert.Equal(0, await Commands().ViewLock(3, "127.0.0.1", device.Port));
+        Assert.Equal('O', device.Locks()[2]);
+
+        Assert.Equal(0, await Commands().ViewUnlock(3, host: "127.0.0.1", port: device.Port));
+        Assert.Equal('U', device.Locks()[2]);
+    }
+
+    [Fact]
+    public async Task Mutations_ReportADeviceRejectionAsOneErrorLine()
+    {
+        await using var device = FakeVideohub.StartRejecting(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        var exit = await Commands().ViewSet(1, 2, "127.0.0.1", device.Port);
+
+        Assert.Equal(1, exit);
+        Assert.StartsWith("error: ", _stderr.ToString());
+        Assert.DoesNotContain("   at ", _stderr.ToString());
+    }
 }

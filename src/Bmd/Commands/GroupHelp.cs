@@ -42,6 +42,11 @@ internal static class GroupHelp
         new("multiview input list", "List sources (1-based) with their labels."),
         new("multiview view list", "List views (1-based) with label, source, and lock state."),
         new("multiview config", "Print the device's CONFIGURATION block exactly as reported."),
+        new("multiview view set", "Put a source in a view: view then input (both 1-based, destination first)."),
+        new("multiview input rename", "Rename a source (1-based)."),
+        new("multiview view rename", "Rename a view (1-based)."),
+        new("multiview view lock", "Take the lock on a view (1-based)."),
+        new("multiview view unlock", "Release the lock on a view (1-based)."),
     ];
 
     static readonly string[] Groups = ["config", "videohub", "multiview"];

@@ -71,7 +71,7 @@
     <h2>See it work</h2>
     <p class="demo-note" style="margin-top:0;margin-bottom:0.75rem;">
       A real session against a Videohub on the local network. Assumes the hub's address is
-      already configured — see <a href="#quick-start">Quick start</a> below.
+      already configured — see <a href="#using">Using it</a> below.
     </p>
     <div class="terminal">
 <pre><code><span class="prompt-line"><span class="prompt-sign">$</span> bmd discover</span>
@@ -136,77 +136,82 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
       </li>
     </ul>
     <p class="verify">
-      Each release also publishes
-      <a href="https://github.com/davojc/bmdcli/releases/latest/download/checksums.txt">checksums.txt</a>,
-      listing the SHA-256 checksum of every archive in the release — not just the one you
-      downloaded. Save it alongside your download, then verify with <code>--ignore-missing</code>
-      so the check doesn't complain about the four archives you don't have:
-    </p>
-    <pre class="cmd"><code># Linux
-sha256sum --ignore-missing -c checksums.txt
-
-# macOS
-shasum -a 256 --ignore-missing -c checksums.txt</code></pre>
-    <p class="verify">A good download reports exactly one line, ending in <code>OK</code>:</p>
-    <pre class="cmd cmd-out"><code>bmd-linux-x64.tar.gz: OK</code></pre>
-    <p class="verify">
-      Windows has no equivalent of <code>-c</code> — print the hash instead and compare it by eye
-      against the matching line in <code>checksums.txt</code>:
-    </p>
-    <pre class="cmd"><code>Get-FileHash bmd-win-x64.zip -Algorithm SHA256</code></pre>
-    <p class="verify">
-      The <code>Hash</code> it prints should match (case doesn't matter) the checksum listed next
-      to <code>bmd-win-x64.zip</code>.
-    </p>
-    <p class="verify">
-      <strong>macOS:</strong> these binaries aren't notarized by Apple, so Gatekeeper blocks the
-      first run with <code>"bmd" cannot be opened because the developer cannot be verified</code>.
-      That's expected, not a bad download — and the usual right-click&nbsp;&rarr;&nbsp;Open
-      workaround doesn't apply to command-line binaries. After extracting, clear the quarantine
-      attribute once:
-    </p>
-    <pre class="cmd"><code>xattr -d com.apple.quarantine bmd</code></pre>
-    <p class="verify">
-      Extracting with <code>tar xzf bmd-osx-arm64.tar.gz</code> in Terminal, rather than
-      double-clicking the archive in Finder, avoids the quarantine flag being set in the first
-      place.
+      Unzip it, put it on your <code>PATH</code>, and you're done. Verifying the download against
+      its published checksums, the macOS first-run block, and how updates work are all on the
+      <a href="install.html">install page</a>.
     </p>
   </section>
 
-  <section id="quick-start" data-label="Setup">
-    <h2>Quick start</h2>
-    <ol class="steps">
-      <li>
-        Point <code>bmd</code> at your Videohub — either find it automatically and save it:
-        <pre><code>bmd discover --add</code></pre>
-        or set the address directly if you already know it (or discovery doesn't reach it —
-        see the <a href="videohub.html#known-limitations">guide's known limitations</a>):
-        <pre><code>bmd config set videohub.host 192.168.1.50</code></pre>
-      </li>
-      <li>
-        Confirm it worked:
-        <pre><code>bmd videohub route list</code></pre>
-      </li>
-      <li>
-        Every command documents itself:
-        <pre><code>bmd videohub route set --help</code></pre>
-      </li>
-    </ol>
-    <p>
-      Once bmd is installed, it keeps itself current: run <code>bmd update</code> to
-      install the newest release, or <code>bmd update --check</code> to see whether one
-      exists without changing anything. Downloads are verified against the release's
-      SHA-256 checksums before anything is replaced.
+  <section id="using" data-label="Commands">
+    <h2>Using it</h2>
+
+    <p>Point bmd at your hub once — it remembers.</p>
+    <pre class="cmd"><code>bmd discover --add</code></pre>
+    <p class="demo-note">
+      Or set the address by hand, if you already know it or discovery doesn't reach it (see the
+      <a href="videohub.html#known-limitations">guide's known limitations</a>):
+      <code>bmd config set videohub.host 192.168.1.50</code>
     </p>
+
     <p>
-      bmd also checks for a new release at most once a day and prints a two-line
-      reminder when one appears. To turn that off:
-      <code>bmd config set update.check false</code>.
+      After that, this is the whole working vocabulary. Inputs and outputs are numbered the way
+      the front panel numbers them, starting at 1.
     </p>
+
+    <dl class="commands">
+      <div>
+        <dt>bmd videohub route list</dt>
+        <dd>What is feeding each output, right now.</dd>
+      </div>
+      <div>
+        <dt>bmd videohub route set 4 13</dt>
+        <dd>Send input 13 to output 4 — destination first, then source.</dd>
+      </div>
+      <div>
+        <dt>bmd videohub info</dt>
+        <dd>Model, protocol version, and how many inputs and outputs the hub has.</dd>
+      </div>
+      <div>
+        <dt>bmd videohub input list</dt>
+        <dd>Input numbers and their labels. <code>output list</code> does the same for outputs, plus routing and locks.</dd>
+      </div>
+      <div>
+        <dt>bmd videohub input rename 3 "Camera 2"</dt>
+        <dd>Relabel a source on the device itself, so the front panel agrees with you.</dd>
+      </div>
+      <div>
+        <dt>bmd videohub output lock 4</dt>
+        <dd>Stop anyone else re-routing output 4. <code>output unlock 4</code> releases it.</dd>
+      </div>
+      <div>
+        <dt>bmd videohub export show.json</dt>
+        <dd>Save every label and route to a file, verified against the hub. Leave the filename off to write to stdout.</dd>
+      </div>
+      <div>
+        <dt>bmd videohub restore show.json</dt>
+        <dd>Put that state back, changing only what differs. Add <code>--dry-run</code> to see the plan first.</dd>
+      </div>
+      <div>
+        <dt>bmd videohub watch</dt>
+        <dd>Stream changes as they happen — including ones made from the front panel or another controller.</dd>
+      </div>
+      <div>
+        <dt>bmd discover</dt>
+        <dd>Find Blackmagic devices on the local network.</dd>
+      </div>
+      <div>
+        <dt>--json</dt>
+        <dd>On any command. One JSON document on stdout with stable field names, so scripts and agents can read it.</dd>
+      </div>
+    </dl>
+
     <p>
-      <strong>Windows:</strong> after an interrupted <code>bmd update</code>, it is possible to be
-      left with <code>bmd.exe.old</code> and no <code>bmd.exe</code>. Renaming
-      <code>bmd.exe.old</code> back to <code>bmd.exe</code> restores the previous version.
+      Every command explains itself, including units, ranges and defaults:
+    </p>
+    <pre class="cmd"><code>bmd videohub route set --help</code></pre>
+    <p class="verify">
+      Anything that changes the hub snapshots it first, so there is always a way back — see
+      <a href="videohub.html#backups">backups</a> in the guide.
     </p>
   </section>
 
@@ -222,7 +227,9 @@ shasum -a 256 --ignore-missing -c checksums.txt</code></pre>
 
   <footer>
     <p>
-      <a href="https://github.com/davojc/bmdcli">Source on GitHub</a>
+      <a href="videohub.html">Videohub guide</a>
+      · <a href="install.html">Install &amp; verify</a>
+      · <a href="https://github.com/davojc/bmdcli">Source on GitHub</a>
       · <a href="https://github.com/davojc/bmdcli/blob/main/LICENSE">MIT licensed</a>
     </p>
     <p class="disclaimer">

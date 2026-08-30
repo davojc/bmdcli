@@ -552,6 +552,48 @@ pre.cmd.cmd-out {
   color: var(--fg-dim);
 }
 
+/* ---------- Command overview ----------
+   Reads as a spec sheet: the command on the left in the tool's own voice, what
+   it does on the right in plain language. Hairlines rather than boxes, so a
+   dozen rows scan as one table instead of a dozen cards. */
+
+.commands {
+  margin: 1.3rem 0 1.6rem;
+  display: grid;
+  gap: 0.9rem;
+}
+
+.commands > div {
+  display: grid;
+  grid-template-columns: minmax(0, 18rem) minmax(0, 1fr);
+  gap: 0.3rem 1.25rem;
+  align-items: baseline;
+  padding-bottom: 0.9rem;
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.commands > div:last-child {
+  padding-bottom: 0;
+  border-bottom: 0;
+}
+
+.commands dt {
+  font-family: var(--font-mono);
+  font-size: 0.85rem;
+  font-weight: 600;
+  overflow-wrap: anywhere;
+}
+
+.commands dd {
+  margin: 0;
+  font-size: 0.93rem;
+  color: var(--fg-dim);
+}
+
+.commands dd code {
+  font-size: 0.88em;
+}
+
 /* ---------- Quick start ---------- */
 
 .steps {
@@ -702,6 +744,13 @@ footer .disclaimer {
 }
 
 /* ---------- Responsive ---------- */
+
+@media (max-width: 40rem) {
+  .commands > div {
+    grid-template-columns: minmax(0, 1fr);
+    gap: 0.2rem;
+  }
+}
 
 @media (max-width: 560px) {
   .page-nav ol {

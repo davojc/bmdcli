@@ -1,0 +1,130 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="utf-8">
+<meta name="viewport" content="width=device-width, initial-scale=1">
+<title>bmd — install and verify</title>
+<meta name="description" content="Verifying a bmd download against its published SHA-256 checksums, clearing the macOS quarantine flag, and keeping bmd up to date with bmd update.">
+<meta name="theme-color" content="#0c0d10">
+<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTQnIGZpbGw9JyNmMjU0MmQnLz48dGV4dCB4PSczMicgeT0nNDUnIGZvbnQtZmFtaWx5PSdtb25vc3BhY2UnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9JyMwYzBkMTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnPiZndDtfPC90ZXh0Pjwvc3ZnPg==">
+<link rel="stylesheet" href="style.css">
+</head>
+<body>
+<div class="page">
+
+  <header class="guide-header">
+    <p class="back-link"><a href="index.html">&larr; bmd</a></p>
+    <h1>Install and verify</h1>
+    <p class="tagline">
+      Checking that the binary you downloaded is the one that was published, getting past
+      the macOS first-run block, and staying current afterwards.
+    </p>
+  </header>
+
+  <nav class="page-nav" aria-label="Sections">
+    <ol>
+      <li><a href="#verify">1. Verify your download</a></li>
+      <li><a href="#macos">2. macOS first run</a></li>
+      <li><a href="#updating">3. Staying up to date</a></li>
+    </ol>
+  </nav>
+
+  <section id="verify">
+    <h2>1. Verify your download</h2>
+    <p>
+      Every release publishes
+      <a href="https://github.com/davojc/bmdcli/releases/latest/download/checksums.txt">checksums.txt</a>
+      alongside the binaries. It lists the SHA-256 of <em>every</em> archive in the release, not
+      just the one you took, so the check needs <code>--ignore-missing</code> — otherwise it
+      complains about the four archives you never downloaded.
+    </p>
+    <p>Save <code>checksums.txt</code> next to your download, then:</p>
+    <pre class="cmd"><code># Linux
+sha256sum --ignore-missing -c checksums.txt
+
+# macOS
+shasum -a 256 --ignore-missing -c checksums.txt</code></pre>
+    <p>A good download reports exactly one line, ending in <code>OK</code>:</p>
+    <pre class="cmd cmd-out"><code>bmd-linux-x64.tar.gz: OK</code></pre>
+    <p>
+      Windows has no equivalent of <code>-c</code>, so print the hash and compare it by eye
+      against the matching line in <code>checksums.txt</code>:
+    </p>
+    <pre class="cmd"><code>Get-FileHash bmd-win-x64.zip -Algorithm SHA256</code></pre>
+    <p>
+      The <code>Hash</code> it prints should match the checksum listed next to
+      <code>bmd-win-x64.zip</code>. Case doesn't matter.
+    </p>
+  </section>
+
+  <section id="macos">
+    <h2>2. macOS first run</h2>
+    <p>
+      These binaries aren't notarized by Apple, so Gatekeeper blocks the first run with
+      <code>"bmd" cannot be opened because the developer cannot be verified</code>. That is
+      expected, not a sign of a bad download — and the usual right-click&nbsp;&rarr;&nbsp;Open
+      workaround doesn't apply to command-line binaries.
+    </p>
+    <p>After extracting, clear the quarantine attribute once:</p>
+    <pre class="cmd"><code>xattr -d com.apple.quarantine bmd</code></pre>
+    <p>
+      Extracting in Terminal with <code>tar xzf bmd-osx-arm64.tar.gz</code>, rather than
+      double-clicking the archive in Finder, avoids the flag being set in the first place.
+    </p>
+  </section>
+
+  <section id="updating">
+    <h2>3. Staying up to date</h2>
+    <p>
+      Once bmd is installed it keeps itself current. To install the newest release:
+    </p>
+    <pre class="cmd"><code>bmd update</code></pre>
+    <p>
+      Or to find out whether one exists without changing anything:
+    </p>
+    <pre class="cmd"><code>bmd update --check</code></pre>
+    <p>
+      The download is verified against the release's SHA-256 checksums before anything is
+      replaced. If the checksum doesn't match, the update aborts and your existing binary is
+      left untouched.
+    </p>
+    <p>
+      bmd also checks for a new release at most once a day and prints a two-line reminder on
+      stderr when one appears. It never delays the command you actually ran, and it stays quiet
+      when output is piped or <code>--json</code> is in play. To switch it off:
+    </p>
+    <pre class="cmd"><code>bmd config set update.check false</code></pre>
+    <p>
+      <strong>Windows:</strong> a running <code>bmd.exe</code> can't be overwritten, so an update
+      renames it to <code>bmd.exe.old</code> and moves the new one into place, clearing the old
+      file on a later run. If an update is interrupted at exactly the wrong moment you can be
+      left with <code>bmd.exe.old</code> and no <code>bmd.exe</code> — renaming it back restores
+      the previous version.
+    </p>
+  </section>
+
+  <section id="next">
+    <div class="guide-callout">
+      <p>
+        Installed and verified? The <a href="index.html#using"><strong>command overview</strong></a>
+        covers day-to-day use, and the <a href="videohub.html"><strong>Videohub guide</strong></a>
+        goes deep on routing, backups, restore and scripting.
+      </p>
+    </div>
+  </section>
+
+  <footer>
+    <p>
+      <a href="index.html">bmd</a>
+      · <a href="videohub.html">Videohub guide</a>
+      · <a href="https://github.com/davojc/bmdcli">Source on GitHub</a>
+    </p>
+    <p class="disclaimer">
+      bmd is an independent project and is not affiliated with, endorsed by, or supported by
+      Blackmagic Design.
+    </p>
+  </footer>
+
+</div>
+</body>
+</html>

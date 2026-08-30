@@ -154,7 +154,7 @@ public class DiscoverCommands
 
         if (!_isInteractive())
         {
-            Console.Error.WriteLine("error: --add needs an interactive terminal; run bmd config set videohub.host <address> instead");
+            Console.Error.WriteLine("error: --add needs an interactive terminal; run bmd config set <type>.host <address> instead");
             return 2;
         }
 

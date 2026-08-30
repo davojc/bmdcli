@@ -1,3 +1,5 @@
+using System.Runtime.CompilerServices;
+using System.Text.RegularExpressions;
 using Bmd.Commands;
 
 namespace Bmd.Tests.Commands;
@@ -27,6 +29,23 @@ public class GroupHelpTests
         Assert.DoesNotContain("config get", text);
     }
 
+    // Fix 8: eighteen multiview command registrations landed with zero group-help coverage —
+    // a parallel theory to VideohubGroup_ListsOnlyVideohubCommands, above, so `bmd multiview`
+    // and `bmd multiview --help` are exercised the same way.
+    [Theory]
+    [InlineData(new object[] { new[] { "multiview" } })]
+    [InlineData(new object[] { new[] { "multiview", "--help" } })]
+    [InlineData(new object[] { new[] { "multiview", "-h" } })]
+    public void MultiViewGroup_ListsOnlyMultiViewCommands(string[] args)
+    {
+        var text = Write(args);
+        Assert.Contains("multiview view set", text);
+        Assert.Contains("multiview info", text);
+        Assert.Contains("multiview solo", text);
+        Assert.DoesNotContain("videohub", text);
+        Assert.DoesNotContain("config get", text);
+    }
+
     [Fact]
     public void ConfigGroup_ListsOnlyConfigCommands()
     {
@@ -53,5 +72,33 @@ public class GroupHelpTests
         Assert.Contains(GroupHelp.Commands, c => c.Path == "videohub output unlock");
         Assert.All(GroupHelp.Commands, c => Assert.False(string.IsNullOrWhiteSpace(c.Description)));
         Assert.Equal(GroupHelp.Commands.Length, GroupHelp.Commands.Select(c => c.Path).Distinct().Count());
+    }
+
+    // Fix 8: the fact above only ever spot-checked one Videohub path despite its name. This
+    // reads every `app.Add("<path>", ...)` registration straight out of Program.cs (the single
+    // source of truth for what's actually wired up) and asserts each one has a GroupHelp.Commands
+    // entry — so forgetting the listing for ANY newly-registered command fails, not just the one
+    // path that happened to be spot-checked.
+    [Fact]
+    public void EveryRegisteredCommandAppearsInTheTable_CheckedAgainstProgramCs()
+    {
+        var path = ProgramCsPath();
+        Assert.True(File.Exists(path), $"expected to find Program.cs at '{path}'");
+
+        var registered = Regex.Matches(File.ReadAllText(path), @"app\.Add\(""([^""]+)""")
+            .Select(m => m.Groups[1].Value)
+            .ToArray();
+        // Guards the guard: if the regex ever stops matching (e.g. Program.cs's registration
+        // style changes), fail loudly here rather than silently passing on zero comparisons.
+        Assert.True(registered.Length >= 30, $"expected many registrations, found {registered.Length}");
+
+        foreach (var commandPath in registered)
+            Assert.Contains(GroupHelp.Commands, c => c.Path == commandPath);
+    }
+
+    static string ProgramCsPath([CallerFilePath] string here = "")
+    {
+        var testDirectory = Path.GetDirectoryName(here)!;
+        return Path.GetFullPath(Path.Combine(testDirectory, "..", "..", "..", "src", "Bmd", "Program.cs"));
     }
 }

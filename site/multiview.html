@@ -86,8 +86,8 @@ Output format:  1080i5994</code></pre>
 2     Window 2    2   Camera 2      unlocked
 3     Window 3    3   Switcher PGM  unlocked
 4     Window 4    4   Switcher PVW  unlocked
-5     Solo        1   Camera 1      unlocked
-6     Audio       1   Camera 1      unlocked</code></pre>
+5     Solo Input  1   Camera 1      unlocked
+6     Audio Input 1   Camera 1      unlocked</code></pre>
     <p>
       <strong>On a MultiView 4, that last part is worth stating plainly: views 5 and 6 are not
       windows at all.</strong> They are <code>Solo Input</code> (what's shown full-screen when solo
@@ -232,9 +232,9 @@ bmd multiview restore before.json</code></pre>
       <code>watch</code> streams every change as it happens, no matter who made it:
     </p>
     <pre class="cmd"><code>bmd multiview watch</code></pre>
-    <pre class="cmd cmd-out"><code>view 1: Camera 1 → Camera 2
+    <pre class="cmd cmd-out"><code>view 1 (Window 1): Camera 1 → Camera 2
 view 3 label: 'Window 3' → 'PGM Preview'
-view 5 lock: unlocked → owned</code></pre>
+view 5 (Solo Input) lock: unlocked → owned</code></pre>
     <p>
       It runs until you stop it with Ctrl+C, or the connection drops, and (like every command)
       accepts <code>--json</code> — see the

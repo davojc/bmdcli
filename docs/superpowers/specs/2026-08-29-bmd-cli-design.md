@@ -276,12 +276,28 @@ Design:
   block plus its serialization for writes. `Devices/Videohub/` stays the home
   of the protocol itself — Blackmagic's own name for it is the *Videohub*
   Ethernet Protocol, and the MultiView speaks it.
-- The command bodies shared by both groups (routing, labels, locks, export,
-  restore, watch) are extracted into a device-agnostic core. `VideohubCommands`
-  and `MultiViewCommands` stay thin and keep **separate XML doc comments**,
-  because the vocabulary differs and help text is the API. This is the shared
-  device abstraction that was deliberately deferred until a second device type
-  existed.
+- **Only the plumbing is shared, and the command bodies are deliberately
+  duplicated.** `DeviceSession` carries what was genuinely device-agnostic —
+  resolving host/port/timeout from flags then config, connecting, taking the
+  pre-mutation backup, and mapping every expected failure to one stderr line —
+  parameterised by config section, which turned out to be the only thing that
+  differed. That is the shared device abstraction deferred until a second
+  device type existed.
+
+  The command *bodies* are not shared. Help text is the API here, and
+  ConsoleAppFramework generates it from XML doc comments on the method, so two
+  groups needing different nouns and different `--help` output cannot share a
+  method body. `VideohubCommands` and `MultiViewCommands` are peers.
+
+  The cost is real and is accepted with open eyes: `Export` and `Restore` are
+  near-verbatim copies across the two groups, including the catch blocks whose
+  comments explain why framing is undefined after a timeout and why a NAK must
+  stop the apply loop. That is policy, not vocabulary, and it now exists twice —
+  a bug fixed in one can be missed in the other. **Follow-up:** extract the
+  export capture/verify/retry loop and the restore apply-loop failure taxonomy
+  into runners that return structured results, leaving all printing and all XML
+  docs in the command classes. Route, rename and lock are short enough that
+  duplicating them stays cheaper than abstracting them.
 - **Snapshots include configuration** for MultiView: the event workflow is the
   headline use case and a multiviewer's layout is part of its setup. The field
   is optional — a snapshot without it restores exactly as today, and restore
@@ -339,20 +355,52 @@ reflection-free). Self-describing and diffable:
   "videoOutputs": 20,
   "exportedAt": "2026-08-29T10:12:00Z",
   "inputs":  [ { "n": 1, "label": "Cam 1" } ],
-  "outputs": [ { "n": 1, "label": "Program", "input": 3 } ]
+  "outputs": [ { "n": 1, "label": "Program", "input": 3 } ],
+  "configuration": null
 }
 ```
 
 Captured: input labels, output labels, routing. **Locks are excluded** (see
 non-goals).
 
+`configuration` is the MultiView's `CONFIGURATION` block, and is **last and
+optional** so every snapshot written before it existed — including every
+automatic backup already on a user's disk — still deserializes and still
+restores identically. It is null for a Videohub, which never sends the block,
+and null in any snapshot whose export did not ask for it. A MultiView export
+populates it:
+
+```json
+  "configuration": {
+    "layout": "2x2",
+    "outputFormat": "1080i5994",
+    "soloEnabled": false,
+    "widescreenSdEnabled": true,
+    "displayBorder": true,
+    "displayLabels": true,
+    "displayAudioMeters": false,
+    "displaySdiTally": false,
+    "takeMode": true
+  }
+```
+
+Every field is nullable, because the block is undocumented and a different
+model or firmware may report a different set: "the device never reported this"
+must stay distinguishable from "the device reported false". Restore compares
+**per property** and sends only what differs — never by record equality, which
+would re-send everything.
+
 **Export is verified.** Flow:
 
 1. Capture — read the device's full state dump.
 2. Write — serialize to the target file (or stdout).
 3. Verify — read the written file back, deserialize, fetch a *fresh* dump from
-   the device, compare field-by-field (every label, every route). Proves the
-   file round-trips intact **and** still matches the device.
+   the device, compare field-by-field (every label, every route, and — when the
+   snapshot captured one — every configuration property). Proves the file
+   round-trips intact **and** still matches the device. A snapshot with no
+   configuration section skips that comparison rather than treating it as a
+   mismatch: it means this export did not capture configuration, not that the
+   device changed.
 4. On mismatch (e.g. someone routed mid-export): re-capture and retry, up to
    3 attempts, then exit 1 listing the differing entries. For stdout exports,
    verification compares the in-memory serialized bytes instead of re-reading

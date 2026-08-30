@@ -302,4 +302,135 @@ public class MultiViewCommandsTests : IDisposable
         Assert.StartsWith("error: ", _stderr.ToString());
         Assert.DoesNotContain("   at ", _stderr.ToString());
     }
+
+    [Fact]
+    public async Task ViewSet_HumanMode_ReportsTheBackupLine()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        var exit = await Commands().ViewSet(1, 3, "127.0.0.1", device.Port);
+
+        Assert.Equal(0, exit);
+        Assert.Matches(@"Backup: .+", _stdout.ToString());
+        Assert.DoesNotContain("Backup: skipped", _stdout.ToString());
+    }
+
+    [Fact]
+    public async Task ViewRename_Json_ReportsTheBackupPath()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        var exit = await Commands().ViewRename(1, "Programme", "127.0.0.1", device.Port, json: true);
+
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(_stdout.ToString().Trim());
+        Assert.False(string.IsNullOrWhiteSpace(doc.RootElement.GetProperty("backup").GetString()));
+    }
+
+    [Fact]
+    public async Task ViewLock_Json_ReportsTheBackupPath()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        File.WriteAllText(Path.Combine(_directory, "config"),
+            $"[backup]\ndir = {_directory.Replace("\\", "/")}/backups\n");
+
+        var exit = await Commands().ViewLock(3, "127.0.0.1", device.Port, json: true);
+
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(_stdout.ToString().Trim());
+        Assert.False(string.IsNullOrWhiteSpace(doc.RootElement.GetProperty("backup").GetString()));
+    }
+
+    [Fact]
+    public async Task Export_WritesConfigurationAlongsideLabelsAndRouting()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        var file = Path.Combine(_directory, "show.json");
+
+        var exit = await Commands().Export(file, "127.0.0.1", device.Port);
+
+        Assert.Equal(0, exit);
+        using var doc = JsonDocument.Parse(File.ReadAllText(file));
+        Assert.Equal("2x2", doc.RootElement.GetProperty("configuration").GetProperty("layout").GetString());
+        Assert.Equal(6, doc.RootElement.GetProperty("outputs").GetArrayLength());
+    }
+
+    [Fact]
+    public async Task Restore_DryRun_ReportsTheConfigurationItWouldChangeAndChangesNothing()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        var file = Path.Combine(_directory, "show.json");
+        Assert.Equal(0, await Commands().Export(file, "127.0.0.1", device.Port));
+
+        var edited = File.ReadAllText(file).Replace("\"layout\": \"2x2\"", "\"layout\": \"4x1\"");
+        File.WriteAllText(file, edited);
+        _stdout.GetStringBuilder().Clear();
+
+        var exit = await Commands().Restore(file, "127.0.0.1", device.Port, dryRun: true);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("4x1", _stdout.ToString());
+        Assert.Equal("2x2", device.Configuration().First(p => p.Key == "Layout").Value);
+    }
+
+    [Fact]
+    public async Task Restore_AppliesConfigurationDifferencesOnly()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        var file = Path.Combine(_directory, "show.json");
+        Assert.Equal(0, await Commands().Export(file, "127.0.0.1", device.Port));
+        File.WriteAllText(file, File.ReadAllText(file).Replace("\"layout\": \"2x2\"", "\"layout\": \"4x1\""));
+
+        var exit = await Commands().Restore(file, "127.0.0.1", device.Port);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("4x1", device.Configuration().First(p => p.Key == "Layout").Value);
+        // Unchanged properties are not re-sent.
+        Assert.Equal("1080i5994", device.Configuration().First(p => p.Key == "Output format").Value);
+    }
+
+    [Fact]
+    public async Task Restore_LeavesConfigurationAloneWhenTheSnapshotHasNone()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        var file = Path.Combine(_directory, "legacy.json");
+        File.WriteAllText(file, """
+            {"device":"Blackmagic MultiView 4","videoInputs":4,"videoOutputs":6,
+             "exportedAt":"2026-08-29T14:35:12+00:00",
+             "inputs":[{"n":1,"label":"Stream"},{"n":2,"label":"Screens"},
+                       {"n":3,"label":"Presenter"},{"n":4,"label":"Confidence"}],
+             "outputs":[{"n":1,"label":"View 1","input":1},{"n":2,"label":"View 2","input":2},
+                        {"n":3,"label":"View 3","input":3},{"n":4,"label":"View 4","input":4},
+                        {"n":5,"label":"Solo Input","input":3},{"n":6,"label":"Audio Input","input":1}]}
+            """);
+
+        var exit = await Commands().Restore(file, "127.0.0.1", device.Port);
+
+        Assert.Equal(0, exit);
+        Assert.Equal("2x2", device.Configuration().First(p => p.Key == "Layout").Value);
+    }
+
+    [Fact]
+    public async Task Watch_StreamsAViewChangeAndStopsOnCancellation()
+    {
+        await using var device = FakeVideohub.Start(Fixtures.DumpMultiView4);
+        using var cts = new CancellationTokenSource();
+
+        var watching = Commands().Watch("127.0.0.1", device.Port, cancellationToken: cts.Token);
+        await Task.Delay(150, CancellationToken.None);
+        // Wire output index 0 is 1-based view 1 ("View 1"); PushRouteAsync takes wire (0-based)
+        // indices, not the 1-based numbers the rest of this file uses everywhere else.
+        await device.PushRouteAsync(0, 3);
+        await Task.Delay(150, CancellationToken.None);
+        await cts.CancelAsync();
+
+        var exit = await watching.WaitAsync(TimeSpan.FromSeconds(10), CancellationToken.None);
+
+        Assert.Equal(0, exit);
+        Assert.Contains("View 1", _stdout.ToString());
+    }
 }

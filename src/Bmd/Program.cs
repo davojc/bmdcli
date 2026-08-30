@@ -48,6 +48,9 @@ app.Add("multiview solo", multiview.Solo);
 app.Add("multiview show", multiview.Show);
 app.Add("multiview take-mode", multiview.TakeMode);
 app.Add("multiview widescreen-sd", multiview.WidescreenSd);
+app.Add("multiview watch", multiview.Watch);
+app.Add("multiview export", multiview.Export);
+app.Add("multiview restore", multiview.Restore);
 
 var discover = new DiscoverCommands();
 app.Add("discover", discover.Discover);

@@ -1,3 +1,4 @@
+using System.Net.Sockets;
 using System.Text.Json;
 using Bmd.Config;
 using Bmd.Devices.MultiView;
@@ -460,4 +461,322 @@ public class MultiViewCommands
             }
             return 0;
         });
+
+    /// <summary>Stream device changes as they happen, including changes made by other controllers.
+    /// Numbering is 1-based. A direct copy of `videohub watch`, with view vocabulary in its
+    /// output: a route or lock update names the view's own current label alongside its number.</summary>
+    /// <param name="host">Device address; defaults to config multiview.host.</param>
+    /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
+    /// <param name="timeout">Connection timeout in seconds; defaults to config multiview.timeout, else 5. Watching itself never times out.</param>
+    /// <param name="json">Emit one JSON object per line as updates arrive.</param>
+    /// <param name="cancellationToken">Cancelled by Ctrl+C.</param>
+    public Task<int> Watch(
+        string? host = null, int? port = null, int? timeout = null, bool json = false,
+        CancellationToken cancellationToken = default)
+        => _session.RunWithClientAsync(host, port, timeout, async client =>
+        {
+            // The header is diagnostic chatter about the watch itself, not part of the data
+            // stream — it goes to stderr so stdout stays pure for piping, and is suppressed
+            // entirely in --json mode, which has no room for it since every stdout line must
+            // parse as one of the JSON Lines objects.
+            if (!json)
+                Console.Error.WriteLine($"Watching {client.Host}:{client.Port} — press Ctrl+C to stop");
+
+            await foreach (var update in client.WatchAsync(cancellationToken))
+            {
+                if (json)
+                    Console.WriteLine(JsonSerializer.Serialize(
+                        new MultiViewUpdateResult(KindWord(update.Kind), update.N, update.From, update.To),
+                        BmdJsonContext.Default.MultiViewUpdateResult));
+                else
+                    Console.WriteLine(DescribeUpdate(update, client.State));
+            }
+            // See VideohubCommands.Watch: cancellation ends the sequence cleanly (exit 0); a
+            // dropped connection throws VideohubProtocolException, mapped by RunCatchingAsync.
+            return 0;
+        });
+
+    static string KindWord(VideohubUpdateKind kind) => kind switch
+    {
+        VideohubUpdateKind.InputLabel => "inputLabel",
+        VideohubUpdateKind.OutputLabel => "viewLabel",
+        VideohubUpdateKind.Route => "route",
+        _ => "lock",
+    };
+
+    /// <summary>Human-readable update line, in view vocabulary. A route or lock update also
+    /// names the affected view's own current label, since a bare number does not tell an
+    /// operator which window just changed.</summary>
+    static string DescribeUpdate(VideohubUpdate update, VideohubState state) => update.Kind switch
+    {
+        VideohubUpdateKind.InputLabel => $"input {update.N} label: '{update.From}' → '{update.To}'",
+        VideohubUpdateKind.OutputLabel => $"view {update.N} label: '{update.From}' → '{update.To}'",
+        VideohubUpdateKind.Route =>
+            $"view {update.N} ({state.GetOutputLabel(update.N)}): {update.From} → {update.To}",
+        _ => $"view {update.N} ({state.GetOutputLabel(update.N)}) lock: {update.From} → {update.To}",
+    };
+
+    /// <summary>Export a verified snapshot of sources, views, routing and configuration
+    /// (1-based). Locks are not captured. Modelled on `videohub export`; the only MultiView
+    /// difference is capturing the CONFIGURATION block alongside labels and routing.</summary>
+    /// <param name="file">Destination file; omit to write the snapshot JSON to stdout.</param>
+    /// <param name="host">Device address; defaults to config multiview.host.</param>
+    /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
+    /// <param name="json">Emit a summary object as JSON on stdout; requires a file.</param>
+    public async Task<int> Export(
+        [Argument] string? file = null, string? host = null, int? port = null, int? timeout = null, bool json = false)
+    {
+        if (json && file is null)
+        {
+            Console.Error.WriteLine("error: --json requires a file argument (the snapshot itself goes to stdout without it)");
+            return 2;
+        }
+
+        try
+        {
+            const int attempts = 3;
+            IReadOnlyList<string> differences = [];
+            for (var attempt = 1; attempt <= attempts; attempt++)
+            {
+                VideohubSnapshot? captured = null;
+                var capture = await _session.WithClientAsync(host, port, timeout, client =>
+                {
+                    captured = VideohubSnapshot.FromState(client.State, DateTimeOffset.UtcNow, includeConfiguration: true);
+                    return 0;
+                });
+                if (capture != 0) return capture;
+
+                var snapshot = captured!;
+                var text = snapshot.ToJson();
+                if (file is not null) File.WriteAllText(file, text);
+
+                var written = VideohubSnapshot.FromJson(file is not null ? File.ReadAllText(file) : text);
+                var verify = await _session.WithClientAsync(host, port, timeout, client =>
+                {
+                    differences = written.DifferencesFrom(client.State);
+                    return 0;
+                });
+                if (verify != 0) return verify;
+                if (differences.Count > 0) continue;   // device changed mid-export: recapture
+
+                if (file is null) Console.Write(text);
+                else if (json)
+                    Console.WriteLine(JsonSerializer.Serialize(
+                        new MultiViewExportResult(snapshot.Device, snapshot.VideoInputs, snapshot.VideoOutputs,
+                            snapshot.Outputs.Length, file, true),
+                        BmdJsonContext.Default.MultiViewExportResult));
+                else
+                    Console.WriteLine(
+                        $"Exported and verified: {snapshot.VideoInputs} inputs, {snapshot.VideoOutputs} views, " +
+                        $"{snapshot.Outputs.Length} routes → {file}");
+                return 0;
+            }
+
+            Console.Error.WriteLine(
+                $"error: device kept changing during export; snapshot not verified after {attempts} attempts");
+            foreach (var difference in differences) Console.Error.WriteLine($"  {difference}");
+            return 1;
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException or SnapshotFormatException)
+        {
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return 1;
+        }
+    }
+
+    /// <summary>Apply a snapshot to the device, changing only what differs. Numbering is
+    /// 1-based. Modelled on `videohub restore`: labels and routing are converged the same way;
+    /// the MultiView difference is that once that plan is applied, any CONFIGURATION property
+    /// captured in the snapshot that differs from the device's current value is sent too. A
+    /// snapshot with no configuration section (every one written before this existed) leaves
+    /// configuration untouched.</summary>
+    /// <param name="file">Snapshot file to apply; use - to read from stdin.</param>
+    /// <param name="host">Device address; defaults to config multiview.host.</param>
+    /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
+    /// <param name="dryRun">Show what would change without touching the device.</param>
+    /// <param name="noBackup">Skip the automatic pre-change backup.</param>
+    /// <param name="json">Emit the result as JSON on stdout.</param>
+    public Task<int> Restore(
+        [Argument] string file,
+        string? host = null, int? port = null, int? timeout = null,
+        bool dryRun = false, bool noBackup = false, bool json = false)
+    {
+        VideohubSnapshot snapshot;
+        try
+        {
+            var text = file == "-" ? Console.In.ReadToEnd() : File.ReadAllText(file);
+            snapshot = VideohubSnapshot.FromJson(text);
+        }
+        catch (SnapshotFormatException ex)
+        {
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return Task.FromResult(2);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            Console.Error.WriteLine($"error: {ex.Message}");
+            return Task.FromResult(1);
+        }
+
+        // --dry-run disables the backup thunk outright: nothing on the device is ever going to
+        // change on this run, so there is nothing to protect against.
+        return _session.WithDeferredBackupClientAsync(host, port, timeout, noBackup || dryRun, async (client, ensureBackup) =>
+        {
+            var problems = snapshot.IncompatibilityWith(client.State.Device);
+            if (problems.Count > 0)
+            {
+                Console.Error.WriteLine("error: snapshot does not match this device");
+                foreach (var problem in problems) Console.Error.WriteLine($"  {problem}");
+                return 2;
+            }
+
+            // Computed once, from connect-time state — see RestorePlan and ConfigurationDifferences.
+            var changes = RestorePlan.Compute(snapshot, client.State);
+            var configChanges = snapshot.Configuration is { } snapshotConfig
+                ? ConfigurationDifferences(snapshotConfig, ReadConfiguration(client.State)).ToArray()
+                : [];
+            var totalChanges = changes.Count + configChanges.Length;
+
+            // Spent only once at least one change (label/route OR configuration) is actually
+            // going to be applied — see WithDeferredBackupClientAsync.
+            string? backup = null;
+            if (totalChanges > 0 && !dryRun) backup = await ensureBackup();
+
+            var applied = 0;
+            try
+            {
+                foreach (var change in changes)
+                {
+                    if (dryRun)
+                    {
+                        if (!json) Console.WriteLine($"would {DescribeChange(change)}");
+                        continue;
+                    }
+                    switch (change.Kind)
+                    {
+                        case RestoreChangeKind.InputLabel:
+                            await client.RenameInputAsync(change.N, change.To);
+                            break;
+                        case RestoreChangeKind.OutputLabel:
+                            await client.RenameOutputAsync(change.N, change.To);
+                            break;
+                        default:
+                            await client.SetRouteAsync(change.N, change.TargetInput);
+                            break;
+                    }
+                    applied++;
+                    if (!json) Console.WriteLine(DescribeChange(change));
+                }
+
+                foreach (var change in configChanges)
+                {
+                    if (dryRun)
+                    {
+                        if (!json) Console.WriteLine($"would set {change.Property}: '{change.From}' → '{change.To}'");
+                        continue;
+                    }
+                    await client.SendBlockAsync(
+                        MultiViewConfiguration.BlockHeader,
+                        MultiViewConfiguration.LinesFor(change.Property, change.To),
+                        description: $"CONFIGURATION ({change.Property}: {change.To})");
+                    applied++;
+                    if (!json) Console.WriteLine($"{change.Property}: '{change.From}' → '{change.To}'");
+                }
+            }
+            catch (TimeoutException)
+            {
+                // See VideohubCommands.Restore: framing on this connection is undefined from
+                // here on, so stop immediately; re-running resumes from fresh state.
+                Console.Error.WriteLine(
+                    $"error: timed out; applied {applied} of {totalChanges} changes; re-run to resume");
+                return 1;
+            }
+            catch (VideohubCommandRejectedException ex)
+            {
+                Console.Error.WriteLine(
+                    $"error: {ex.Message}; applied {applied} of {totalChanges} changes before stopping");
+                return 1;
+            }
+            catch (Exception ex) when (ex is IOException or SocketException or VideohubProtocolException)
+            {
+                Console.Error.WriteLine(
+                    $"error: {ex.Message}; applied {applied} of {totalChanges} changes; re-run to resume");
+                return 1;
+            }
+
+            if (json)
+            {
+                var details = changes
+                    .Select(c => new MultiViewRestoreChangeResult(KindWord(c.Kind), c.N, null, c.From, c.To))
+                    .Concat(configChanges.Select(c => new MultiViewRestoreChangeResult("config", 0, c.Property, c.From, c.To)))
+                    .ToArray();
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new MultiViewRestoreResult(file, snapshot.Device, totalChanges, applied, dryRun, backup, details),
+                    BmdJsonContext.Default.MultiViewRestoreResult));
+            }
+            else if (totalChanges == 0)
+                Console.WriteLine("Already matches the snapshot; nothing to do.");
+            else if (dryRun)
+                Console.WriteLine($"{totalChanges} change(s) would be applied from {file}.");
+            else
+            {
+                Console.WriteLine($"Restored {applied} change(s) from {file}");
+                Console.WriteLine($"Backup: {backup ?? "skipped"}");
+            }
+            return 0;
+        });
+    }
+
+    static string KindWord(RestoreChangeKind kind) => kind switch
+    {
+        RestoreChangeKind.InputLabel => "inputLabel",
+        RestoreChangeKind.OutputLabel => "viewLabel",
+        _ => "route",
+    };
+
+    /// <summary>Human-readable restore-change line, in view vocabulary (unlike
+    /// <see cref="RestoreChange.Describe"/>, which is written for `videohub restore`).</summary>
+    static string DescribeChange(RestoreChange change) => change.Kind switch
+    {
+        RestoreChangeKind.InputLabel => $"input {change.N} label: '{change.From}' → '{change.To}'",
+        RestoreChangeKind.OutputLabel => $"view {change.N} label: '{change.From}' → '{change.To}'",
+        _ => $"view {change.N}: {change.From} → {change.To}",
+    };
+
+    /// <summary>One CONFIGURATION property whose snapshot value differs from the device's
+    /// current one.</summary>
+    readonly record struct ConfigurationChange(string Property, string From, string To);
+
+    /// <summary>Every CONFIGURATION property the snapshot captured that differs from the
+    /// device's current value. Compared property by property — never via record equality — so
+    /// an unchanged property is never re-sent. A property the snapshot never captured (null) is
+    /// left alone entirely, regardless of what the device currently reports.</summary>
+    static IEnumerable<ConfigurationChange> ConfigurationDifferences(
+        SnapshotConfiguration snapshot, MultiViewConfiguration device)
+    {
+        if (snapshot.Layout is not null && snapshot.Layout != device.Layout)
+            yield return new ConfigurationChange("Layout", device.Layout ?? "(unset)", snapshot.Layout);
+        if (snapshot.OutputFormat is not null && snapshot.OutputFormat != device.OutputFormat)
+            yield return new ConfigurationChange("Output format", device.OutputFormat ?? "(unset)", snapshot.OutputFormat);
+        if (snapshot.SoloEnabled is not null && snapshot.SoloEnabled != device.SoloEnabled)
+            yield return new ConfigurationChange("Solo enabled", BoolText(device.SoloEnabled), BoolText(snapshot.SoloEnabled));
+        if (snapshot.WidescreenSdEnabled is not null && snapshot.WidescreenSdEnabled != device.WidescreenSdEnabled)
+            yield return new ConfigurationChange(
+                "Widescreen SD enabled", BoolText(device.WidescreenSdEnabled), BoolText(snapshot.WidescreenSdEnabled));
+        if (snapshot.DisplayBorder is not null && snapshot.DisplayBorder != device.DisplayBorder)
+            yield return new ConfigurationChange("Display border", BoolText(device.DisplayBorder), BoolText(snapshot.DisplayBorder));
+        if (snapshot.DisplayLabels is not null && snapshot.DisplayLabels != device.DisplayLabels)
+            yield return new ConfigurationChange("Display labels", BoolText(device.DisplayLabels), BoolText(snapshot.DisplayLabels));
+        if (snapshot.DisplayAudioMeters is not null && snapshot.DisplayAudioMeters != device.DisplayAudioMeters)
+            yield return new ConfigurationChange(
+                "Display audio meters", BoolText(device.DisplayAudioMeters), BoolText(snapshot.DisplayAudioMeters));
+        if (snapshot.DisplaySdiTally is not null && snapshot.DisplaySdiTally != device.DisplaySdiTally)
+            yield return new ConfigurationChange("Display SDI tally", BoolText(device.DisplaySdiTally), BoolText(snapshot.DisplaySdiTally));
+        if (snapshot.TakeMode is not null && snapshot.TakeMode != device.TakeMode)
+            yield return new ConfigurationChange("Take Mode", BoolText(device.TakeMode), BoolText(snapshot.TakeMode));
+    }
+
+    static string BoolText(bool? value) => value switch { true => "true", false => "false", null => "(unset)" };
 }

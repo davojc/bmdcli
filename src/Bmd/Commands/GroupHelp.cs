@@ -53,6 +53,9 @@ internal static class GroupHelp
         new("multiview show", "Turn an on-screen overlay on or off: borders, labels, audio-meters, tally."),
         new("multiview take-mode", "Turn take mode on or off."),
         new("multiview widescreen-sd", "Turn widescreen SD on or off."),
+        new("multiview watch", "Stream device changes as they happen."),
+        new("multiview export", "Export a verified snapshot of sources, views and configuration."),
+        new("multiview restore", "Apply a snapshot, changing only what differs."),
     ];
 
     static readonly string[] Groups = ["config", "videohub", "multiview"];

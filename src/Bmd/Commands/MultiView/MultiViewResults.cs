@@ -26,3 +26,28 @@ public sealed record MultiViewLockResult(int View, string ViewLabel, string Lock
 /// <summary>One CONFIGURATION property write. Setting is the protocol's own property name, so
 /// the output says exactly what was sent to the device.</summary>
 public sealed record MultiViewConfigSetResult(string Setting, string Value, string? Backup);
+
+/// <summary>Result of `multiview export`: what was captured and where it went.</summary>
+public sealed record MultiViewExportResult(
+    string Device, int Inputs, int Views, int Routes, string? File, bool Verified);
+
+/// <summary>One change applied (or that would be applied) by `multiview restore`. Kind is
+/// "inputLabel", "viewLabel", "route", or "config"; N is the 1-based input/view number for the
+/// first three kinds (0 for "config", which instead names the changed property via Setting);
+/// From/To are the previous and new value (for a route, the previous and new input's label).</summary>
+public sealed record MultiViewRestoreChangeResult(string Kind, int N, string? Setting, string From, string To);
+
+/// <summary>Result of `multiview restore`: the snapshot file and device, how many changes were
+/// found and how many were actually applied (equal on full success, less than Changes on a dry
+/// run or a run stopped early by a timeout or rejection), whether this was a dry run, the
+/// pre-change backup path (null if skipped or dry-run), and the changes themselves in the order
+/// they were (or would be) applied.</summary>
+public sealed record MultiViewRestoreResult(
+    string File, string Device, int Changes, int Applied, bool DryRun, string? Backup,
+    MultiViewRestoreChangeResult[] Details);
+
+/// <summary>One line of `multiview watch --json` output (JSON Lines: one object per update, not
+/// a single document, since a stream has no end). Kind is "inputLabel", "viewLabel", "route", or
+/// "lock"; N is the 1-based input/view number; From/To are the previous and new label (for a
+/// route, the previous and new input's label; for a lock, the previous and new lock word).</summary>
+public sealed record MultiViewUpdateResult(string Kind, int N, string From, string To);

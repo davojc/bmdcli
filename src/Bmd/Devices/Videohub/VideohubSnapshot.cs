@@ -1,4 +1,5 @@
 using System.Text.Json;
+using Bmd.Devices.MultiView;
 
 namespace Bmd.Devices.Videohub;
 
@@ -7,24 +8,50 @@ public sealed class SnapshotFormatException(string message) : Exception(message)
 public sealed record SnapshotInput(int N, string Label);
 public sealed record SnapshotOutput(int N, string Label, int Input);
 
+/// <summary>A MultiView's CONFIGURATION at export time. Absent on a Videohub, and absent from
+/// every snapshot written before this existed — which is why it is last and optional.
+/// Every property is nullable so "the device never reported this" stays distinguishable from
+/// "the device reported false".</summary>
+public sealed record SnapshotConfiguration(
+    string? Layout, string? OutputFormat, bool? SoloEnabled, bool? WidescreenSdEnabled,
+    bool? DisplayBorder, bool? DisplayLabels, bool? DisplayAudioMeters, bool? DisplaySdiTally,
+    bool? TakeMode);
+
 /// <summary>A point-in-time capture of a Videohub's labels and routing.
-/// All numbering is 1-based. Locks are deliberately excluded (spec non-goal).</summary>
+/// All numbering is 1-based. Locks are deliberately excluded (spec non-goal).
+/// <see cref="Configuration"/> is a MultiView's window layout and display settings — absent on
+/// a Videohub, and last/optional so every snapshot written before it existed still deserializes.</summary>
 public sealed record VideohubSnapshot(
     string Device,
     int VideoInputs,
     int VideoOutputs,
     DateTimeOffset ExportedAt,
     SnapshotInput[] Inputs,
-    SnapshotOutput[] Outputs)
+    SnapshotOutput[] Outputs,
+    SnapshotConfiguration? Configuration = null)
 {
-    public static VideohubSnapshot FromState(VideohubState state, DateTimeOffset exportedAt)
+    public static VideohubSnapshot FromState(
+        VideohubState state, DateTimeOffset exportedAt, bool includeConfiguration = false)
     {
         var device = state.Device;
         var inputs = Enumerable.Range(1, device.VideoInputs)
             .Select(n => new SnapshotInput(n, state.GetInputLabel(n))).ToArray();
         var outputs = Enumerable.Range(1, device.VideoOutputs)
             .Select(n => new SnapshotOutput(n, state.GetOutputLabel(n), state.GetRoute(n))).ToArray();
-        return new VideohubSnapshot(device.ModelName, device.VideoInputs, device.VideoOutputs, exportedAt, inputs, outputs);
+
+        SnapshotConfiguration? configuration = null;
+        if (includeConfiguration &&
+            state.ExtraBlocks.TryGetValue(MultiViewConfiguration.BlockHeader, out var lines))
+        {
+            var c = MultiViewConfiguration.FromLines(lines);
+            configuration = new SnapshotConfiguration(
+                c.Layout, c.OutputFormat, c.SoloEnabled, c.WidescreenSdEnabled,
+                c.DisplayBorder, c.DisplayLabels, c.DisplayAudioMeters, c.DisplaySdiTally, c.TakeMode);
+        }
+
+        return new VideohubSnapshot(
+            device.ModelName, device.VideoInputs, device.VideoOutputs, exportedAt, inputs, outputs,
+            configuration);
     }
 
     public string ToJson() =>

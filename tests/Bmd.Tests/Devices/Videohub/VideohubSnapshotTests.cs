@@ -105,4 +105,63 @@ public class VideohubSnapshotTests
         var differences = Snapshot().DifferencesFrom(State(smaller));
         Assert.Contains(differences, d => d.Contains("outputs"));
     }
+
+    [Fact]
+    public void FromState_OmitsConfigurationUnlessAsked()
+    {
+        var state = DumpParser.Parse(BlockReader.ReadBlocks(Fixtures.DumpMultiView4));
+        var snapshot = VideohubSnapshot.FromState(state, DateTimeOffset.UnixEpoch);
+        Assert.Null(snapshot.Configuration);
+    }
+
+    [Fact]
+    public void FromState_CapturesConfigurationWhenAsked()
+    {
+        var state = DumpParser.Parse(BlockReader.ReadBlocks(Fixtures.DumpMultiView4));
+
+        var snapshot = VideohubSnapshot.FromState(state, DateTimeOffset.UnixEpoch, includeConfiguration: true);
+
+        Assert.NotNull(snapshot.Configuration);
+        Assert.Equal("2x2", snapshot.Configuration!.Layout);
+        Assert.Equal("1080i5994", snapshot.Configuration.OutputFormat);
+        Assert.True(snapshot.Configuration.TakeMode);
+        Assert.False(snapshot.Configuration.DisplayAudioMeters);
+    }
+
+    [Fact]
+    public void FromState_LeavesConfigurationNullWhenTheDeviceSentNoBlock()
+    {
+        var state = DumpParser.Parse(BlockReader.ReadBlocks(Fixtures.Dump4x4));
+        var snapshot = VideohubSnapshot.FromState(state, DateTimeOffset.UnixEpoch, includeConfiguration: true);
+        Assert.Null(snapshot.Configuration);
+    }
+
+    [Fact]
+    public void Configuration_RoundTripsThroughJson()
+    {
+        var state = DumpParser.Parse(BlockReader.ReadBlocks(Fixtures.DumpMultiView4));
+        var snapshot = VideohubSnapshot.FromState(state, DateTimeOffset.UnixEpoch, includeConfiguration: true);
+
+        var restored = VideohubSnapshot.FromJson(snapshot.ToJson());
+
+        Assert.Equal("2x2", restored.Configuration!.Layout);
+        Assert.True(restored.Configuration.DisplayLabels);
+    }
+
+    [Fact]
+    public void ASnapshotWrittenBeforeConfigurationExistedStillLoads()
+    {
+        // Every backup already on disk was written without this field; none of them may break.
+        const string legacy = """
+            {"device":"Blackmagic Smart Videohub 40 x 40","videoInputs":2,"videoOutputs":2,
+             "exportedAt":"2026-08-29T14:35:12+00:00",
+             "inputs":[{"n":1,"label":"A"},{"n":2,"label":"B"}],
+             "outputs":[{"n":1,"label":"X","input":1},{"n":2,"label":"Y","input":2}]}
+            """;
+
+        var snapshot = VideohubSnapshot.FromJson(legacy);
+
+        Assert.Null(snapshot.Configuration);
+        Assert.Equal(2, snapshot.Outputs.Length);
+    }
 }

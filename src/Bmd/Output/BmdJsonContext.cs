@@ -24,4 +24,6 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(VideohubRestoreResult))]
 [JsonSerializable(typeof(VideohubUpdateResult))]
 [JsonSerializable(typeof(VersionResult))]
+[JsonSerializable(typeof(UpdateCheckResult))]
+[JsonSerializable(typeof(UpdateResult))]
 public partial class BmdJsonContext : JsonSerializerContext;

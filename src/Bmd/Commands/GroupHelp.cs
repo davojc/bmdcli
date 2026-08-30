@@ -21,6 +21,7 @@ internal static class GroupHelp
     [
         new("discover", "Find Blackmagic devices on the local network via mDNS."),
         new("version", "Show the version and platform of this bmd binary."),
+        new("update", "Download and install the newest release of bmd, replacing this binary in place."),
         new("config set", "Set a configuration value."),
         new("config get", "Print the effective value of a configuration key."),
         new("config unset", "Remove a configuration key."),

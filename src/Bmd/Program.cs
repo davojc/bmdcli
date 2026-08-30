@@ -36,6 +36,9 @@ app.Add("discover", discover.Discover);
 var version = new VersionCommands();
 app.Add("version", version.Version);
 
+var update = new UpdateCommands();
+app.Add("update", update.Update);
+
 if (GroupHelp.TryWrite(args, Console.Out)) return 0;
 
 app.Run(args);

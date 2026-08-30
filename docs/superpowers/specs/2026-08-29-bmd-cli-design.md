@@ -61,6 +61,27 @@ bmd videohub export [file]                 # snapshot; no file → stdout
 bmd videohub restore <file>                # apply snapshot; '-' → stdin
                                            # mutating commands take --no-backup
 
+bmd multiview info                         # model, input/view counts, current layout
+bmd multiview input list
+bmd multiview input rename <n> <name>
+bmd multiview view list                    # label, source, lock state
+bmd multiview view rename <n> <name>
+bmd multiview view lock <n>
+bmd multiview view unlock <n> [--force]
+bmd multiview view set <view> <input>      # put a source in a view
+bmd multiview watch
+bmd multiview export [file]                # snapshot incl. configuration
+bmd multiview restore <file>
+
+bmd multiview layout <value>               # e.g. 2x2 — device validates, not bmd
+bmd multiview format <value>               # e.g. 1080i5994 — device validates
+bmd multiview solo <input> | off           # solo a source, or leave solo mode
+bmd multiview show <what> <on|off>         # borders | labels | audio-meters | tally
+                                           #   — exactly the four "Display *" properties
+bmd multiview take-mode <on|off>           # behaviour, not display: kept out of `show`
+bmd multiview widescreen-sd <on|off>
+bmd multiview config [--json]              # print the whole CONFIGURATION block
+
 bmd config set <key> <value> [--global]
 bmd config get <key>
 bmd config unset <key> [--global]
@@ -74,13 +95,14 @@ bmd version                                # embedded version + RID, e.g. "1.2.0
 bmd update [--check]                       # --check reports only; bare form self-updates
 ```
 
-Common options on every `videohub` command:
+Common options on every `videohub` and `multiview` command, reading from that
+group's own config section (`videohub.host`, `multiview.host`, …):
 
 | Option | Default | Notes |
 |---|---|---|
-| `--host <addr>` | from config `videohub.host` | required if not configured |
-| `--port <n>` | from config `videohub.port`, else 9990 | |
-| `--timeout <sec>` | from config `videohub.timeout`, else 5 | connect + command timeout |
+| `--host <addr>` | from config `<group>.host` | required if not configured |
+| `--port <n>` | from config `<group>.port`, else 9990 | |
+| `--timeout <sec>` | from config `<group>.timeout`, else 5 | connect + command timeout |
 | `--json` | off | every command; machine-readable output (see "Agents and scripting") |
 
 ### Numbering rule (hard rule)
@@ -189,6 +211,85 @@ Design:
 - 0-based↔1-based conversion lives at this layer's public boundary: the model
   and everything above it are 1-based; the wire code is 0-based.
 
+## MultiView
+
+The Blackmagic MultiView 4 speaks the **same Videohub Ethernet Protocol**, on
+the same TCP port 9990, reporting the same protocol version 2.8. This was
+established by probing a real device (`192.168.4.96`, firmware 2.2.5): every
+existing `bmd videohub` command already works against it unmodified, because
+`DumpParser` ignores block headers it does not recognise.
+
+Captured dump, verbatim, which is the fixture the fake MultiView server is
+seeded from:
+
+```
+PROTOCOL PREAMBLE:          VIDEOHUB DEVICE:
+Version: 2.8                Device present: true
+                            Model name: Blackmagic MultiView 4
+INPUT LABELS:               Friendly name: AV Multiview
+0 Stream                    Unique ID: 7C2E0D11C751
+1 Screens                   Video inputs: 4
+2 Presenter                 Video processing units: 0
+3 Confidence                Video outputs: 6
+                            Video monitoring outputs: 0
+OUTPUT LABELS:              Serial ports: 0
+0 View 1
+1 View 2                    VIDEO OUTPUT ROUTING:
+2 View 3                    0 0    1 1    2 2
+3 View 4                    3 3    4 2    5 0
+4 Solo Input
+5 Audio Input               VIDEO OUTPUT LOCKS:
+                            0 U  1 U  2 U  3 U  4 U  5 U
+CONFIGURATION:
+Layout: 2x2                 Display border: true
+Output format: 1080i5994    Display labels: true
+Solo enabled: false         Display audio meters: false
+Widescreen SD enabled: true Display SDI tally: false
+                            Take Mode: true
+```
+
+Semantics differ from a router even though the wire format does not: the six
+"outputs" are the four multiview windows plus `Solo Input` and `Audio Input`,
+so the user-facing noun is **view**, not output. That is why MultiView gets its
+own command group rather than being documented as a Videohub.
+
+**The `CONFIGURATION` block is not documented by Blackmagic.** It appears in no
+version of the published Videohub Ethernet Protocol PDF; the property list
+above is observed, not specified. Two consequences bind the design:
+
+- **bmd never whitelists `Layout` or `Output format` values.** Valid values
+  differ by model (MultiView 4 vs 16) and by firmware, and no authoritative list
+  exists to track. bmd sends what the user asked for and surfaces the device's
+  `NAK` as a clear error. Help text documents observed values as examples and
+  says plainly that the device is the authority.
+- **The booleans are validated by bmd**, since `true`/`false` is unambiguous:
+  solo, widescreen SD, display border, display labels, display audio meters,
+  display SDI tally, take mode.
+
+Design:
+
+- `DumpParser` **retains unrecognised blocks** as ordered key/value pairs rather
+  than discarding them, so `CONFIGURATION` reaches the model without the
+  protocol layer growing MultiView-specific knowledge. Future device blocks
+  arrive the same way.
+- `Devices/MultiView/MultiViewConfiguration.cs` is the typed view over that
+  block plus its serialization for writes. `Devices/Videohub/` stays the home
+  of the protocol itself — Blackmagic's own name for it is the *Videohub*
+  Ethernet Protocol, and the MultiView speaks it.
+- The command bodies shared by both groups (routing, labels, locks, export,
+  restore, watch) are extracted into a device-agnostic core. `VideohubCommands`
+  and `MultiViewCommands` stay thin and keep **separate XML doc comments**,
+  because the vocabulary differs and help text is the API. This is the shared
+  device abstraction that was deliberately deferred until a second device type
+  existed.
+- **Snapshots include configuration** for MultiView: the event workflow is the
+  headline use case and a multiviewer's layout is part of its setup. The field
+  is optional — a snapshot without it restores exactly as today, and restore
+  leaves configuration untouched when it is absent.
+- `bmd videohub` continues to work against a MultiView, undocumented and
+  unwarned. It works today, it may already be scripted, and a warning printed
+  by a working command is noise.
+
 ## Device discovery
 
 Blackmagic devices announce themselves via mDNS/DNS-SD: classic devices
@@ -199,13 +300,19 @@ devices `_bmd_blockcfg._tcp.local`. Each responder's TXT record carries a
 - **Mechanism:** query both service types on UDP multicast 224.0.0.251:5353,
   collect responses for the timeout window (default 3 s), resolve each
   responder's PTR → SRV/TXT/A records into model/name, class, IP, port.
-- **Filtering:** a class→device-type mapping table (initially just Videohub)
-  decides what counts as "supported". Default output lists only supported
-  devices; `--all` lists every Blackmagic responder — the tool for verifying
-  discovery works, and for learning real-world `class` strings.
+- **Filtering:** a class→device-type mapping table decides what counts as
+  "supported". Default output lists only supported devices; `--all` lists every
+  Blackmagic responder — the tool for verifying discovery works, and for
+  learning real-world `class` strings.
   **The mapping table is data to be confirmed empirically against real
   hardware** — public documentation of the class values is thin, so `--all`
-  output during implementation feeds the table.
+  output feeds the table. Classes observed on real hardware so far:
+  `Videohub` (Smart Videohub 40x40), `MultiView` (MultiView 4), and
+  `AtemSwitcher` (several ATEM models). Note that HyperDeck and the
+  WebPresenter/Streaming Bridge family answer on port **9977** and advertise no
+  `class=` at all, identifying themselves by a `product id` instead — so
+  supporting them later needs a second identification path, not just another
+  row in this table.
 - **`--add` flow:** discover, print a numbered list of supported devices,
   prompt for a selection, write config exactly as
   `bmd config set videohub.host <ip>` would — local by default, `--global`
@@ -493,3 +600,11 @@ site/
    (index + videohub guide + deploy workflow) — download links only work once
    a release exists, so these land together.
 9. **Self-update:** `bmd update [--check]` + passive 24h notice.
+10. **MultiView:** the second device type, and therefore the point at which the
+    shared device abstraction is finally justified by evidence rather than
+    speculation. Retain unrecognised protocol blocks; parse and write
+    `CONFIGURATION`; extract the shared router core; add the `bmd multiview`
+    group with MultiView vocabulary; teach discovery the `MultiView` class;
+    extend snapshots with optional configuration. The protocol work is small —
+    the device already speaks Videohub — so most of this milestone is the
+    abstraction and the new surface.

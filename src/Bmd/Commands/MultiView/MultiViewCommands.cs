@@ -219,6 +219,11 @@ public class MultiViewCommands
                 Console.Error.WriteLine($"error: {error}");
                 return 2;
             }
+            if (!LabelValidation.TryValidate(label, out var labelError))
+            {
+                Console.Error.WriteLine(labelError);
+                return 2;
+            }
 
             var old = isInput ? state.GetInputLabel(n) : state.GetOutputLabel(n);
             if (isInput) await client.RenameInputAsync(n, label);
@@ -337,6 +342,19 @@ public class MultiViewCommands
         => _session.WithBackedUpClientAsync(host, port, timeout, noBackup, async (client, backup) =>
         {
             var state = client.State;
+            if (ReadConfiguration(state).Raw.Count == 0)
+            {
+                // Same guard as Config: bail before touching anything on the device. Without
+                // this, a host that resolves to a Videohub (typo, swapped device, stale
+                // .bmdconfig) would have its Solo Input's would-be output re-routed for real
+                // before the later CONFIGURATION send got rejected — a visible, unasked-for
+                // change on a live production router.
+                Console.Error.WriteLine(
+                    $"error: {client.State.Device.ModelName} sent no CONFIGURATION block — " +
+                    "it is probably a Videohub rather than a MultiView (try: bmd videohub info)");
+                return 1;
+            }
+
             var off = string.Equals(value, "off", StringComparison.OrdinalIgnoreCase);
             int? source = null;
             if (!off)
@@ -354,10 +372,23 @@ public class MultiViewCommands
                 source = parsed;
             }
 
-            // The Solo Input is the second-to-last "output" on a MultiView 4. Route it first so
-            // that by the time solo is enabled the correct source is already showing.
+            // The Solo Input is the second-to-last "output" on a MultiView 4 — this positional
+            // assumption (views 1..N-2 are windows, N-1 is Solo Input, N is Audio Input) is
+            // specific to the MultiView 4 and will need revisiting for a MultiView 16 or any
+            // model with a different output layout. Route it first so that by the time solo is
+            // enabled the correct source is already showing.
             if (source is { } input)
             {
+                if (state.Device.VideoOutputs < 2)
+                {
+                    // Guards soloView from ever reaching 0 or below, which would otherwise throw
+                    // ArgumentOutOfRangeException past RunCatchingAsync's filter — the same class
+                    // of bug as an unvalidated newline label (see LabelValidation).
+                    Console.Error.WriteLine(
+                        $"error: {client.State.Device.ModelName} reports only " +
+                        $"{state.Device.VideoOutputs} output(s) — too few for a Solo Input");
+                    return 1;
+                }
                 var soloView = state.Device.VideoOutputs - 1;
                 await client.SetRouteAsync(soloView, input);
             }
@@ -366,9 +397,10 @@ public class MultiViewCommands
                 MultiViewConfiguration.LinesFor("Solo enabled", off ? "false" : "true"),
                 description: $"CONFIGURATION (Solo enabled: {(off ? "false" : "true")})");
 
-            var result = new MultiViewConfigSetResult("Solo enabled", off ? "false" : "true", backup);
+            var result = new MultiViewSoloResult(
+                !off, source, source is { } s ? state.GetInputLabel(s) : null, backup);
             if (json)
-                Console.WriteLine(JsonSerializer.Serialize(result, BmdJsonContext.Default.MultiViewConfigSetResult));
+                Console.WriteLine(JsonSerializer.Serialize(result, BmdJsonContext.Default.MultiViewSoloResult));
             else
             {
                 Console.WriteLine(off

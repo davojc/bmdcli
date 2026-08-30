@@ -434,7 +434,7 @@ public class VideohubCommands
                 Console.Error.WriteLine($"error: input must be between 1 and {device.VideoInputs}");
                 return 2;
             }
-            if (!TryValidateLabel(label, out var labelError))
+            if (!LabelValidation.TryValidate(label, out var labelError))
             {
                 Console.Error.WriteLine(labelError);
                 return 2;
@@ -475,7 +475,7 @@ public class VideohubCommands
                 Console.Error.WriteLine($"error: output must be between 1 and {device.VideoOutputs}");
                 return 2;
             }
-            if (!TryValidateLabel(label, out var labelError))
+            if (!LabelValidation.TryValidate(label, out var labelError))
             {
                 Console.Error.WriteLine(labelError);
                 return 2;
@@ -573,19 +573,6 @@ public class VideohubCommands
             }
             return 0;
         });
-
-    /// <summary>Validates a label before it is sent to the device. Newlines would break the
-    /// line-oriented protocol, so they are rejected here rather than left to the device.</summary>
-    static bool TryValidateLabel(string label, out string error)
-    {
-        if (label.Contains('\n') || label.Contains('\r'))
-        {
-            error = "error: label must not contain newlines";
-            return false;
-        }
-        error = "";
-        return true;
-    }
 
     static string LockWord(LockState lockState) => VideohubUpdate.Word(lockState);
 

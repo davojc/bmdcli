@@ -27,6 +27,13 @@ public sealed record MultiViewLockResult(int View, string ViewLabel, string Lock
 /// the output says exactly what was sent to the device.</summary>
 public sealed record MultiViewConfigSetResult(string Setting, string Value, string? Backup);
 
+/// <summary>Result of `multiview solo`. A dedicated record rather than reusing
+/// <see cref="MultiViewConfigSetResult"/>: solo is two things on the wire (the enable flag, and
+/// which source now feeds the Solo Input view), and an agent needs both without a follow-up
+/// query. Input and InputLabel are null when solo was turned off, since routing is left
+/// untouched in that case.</summary>
+public sealed record MultiViewSoloResult(bool Enabled, int? Input, string? InputLabel, string? Backup);
+
 /// <summary>Result of `multiview export`: what was captured and where it went.</summary>
 public sealed record MultiViewExportResult(
     string Device, int Inputs, int Views, int Routes, string? File, bool Verified);

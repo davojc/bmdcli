@@ -111,4 +111,24 @@ public class SemVerTests
         Assert.False(version.IsPreRelease);
         Assert.Equal("0.0.0", version.ToString());
     }
+
+    [Fact]
+    public void CompareTo_TreatsDefaultValueAsZeroZeroZeroWithNoPreRelease()
+    {
+        // CompareTo must be as null-safe as IsPreRelease/ToString: default(SemVer) is "0.0.0"
+        // with no pre-release, both against itself and against parsed values.
+        Assert.Equal(0, default(SemVer).CompareTo(default));
+
+        Assert.True(SemVer.TryParse("0.0.0", out var zero));
+        Assert.Equal(0, default(SemVer).CompareTo(zero));
+        Assert.Equal(0, zero.CompareTo(default));
+
+        Assert.True(SemVer.TryParse("1.0.0", out var oneOhOh));
+        Assert.True(default(SemVer).CompareTo(oneOhOh) < 0);
+        Assert.True(oneOhOh.CompareTo(default) > 0);
+
+        Assert.True(SemVer.TryParse("1.2.3-rc.1", out var pre));
+        Assert.True(pre.CompareTo(default) > 0);
+        Assert.True(default(SemVer).CompareTo(pre) < 0);
+    }
 }

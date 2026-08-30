@@ -75,11 +75,16 @@ public readonly record struct SemVer(int Major, int Minor, int Patch, string Pre
         if (Major != other.Major) return Major.CompareTo(other.Major);
         if (Minor != other.Minor) return Minor.CompareTo(other.Minor);
         if (Patch != other.Patch) return Patch.CompareTo(other.Patch);
-        if (PreRelease == other.PreRelease) return 0;
+
+        // Null-safe like IsPreRelease/ToString: default(SemVer) leaves PreRelease null, and a
+        // null pre-release means the same thing as an empty one — this is not a pre-release.
+        var pre = PreRelease ?? "";
+        var otherPre = other.PreRelease ?? "";
+        if (pre == otherPre) return 0;
         // "1.2.3" is newer than "1.2.3-rc.1": a version without a pre-release suffix wins.
-        if (PreRelease.Length == 0) return 1;
-        if (other.PreRelease.Length == 0) return -1;
-        return ComparePreRelease(PreRelease, other.PreRelease);
+        if (pre.Length == 0) return 1;
+        if (otherPre.Length == 0) return -1;
+        return ComparePreRelease(pre, otherPre);
     }
 
     /// <summary>Semver pre-release precedence: compare dot-separated identifiers left to right;

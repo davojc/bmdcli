@@ -52,20 +52,63 @@ public sealed class VideohubClient : IAsyncDisposable
         }
     }
 
+    /// <summary>How long to keep listening for further blocks once the required set is complete
+    /// but END PRELUDE has not arrived. A real device that has more to say (e.g. a MultiView's
+    /// CONFIGURATION, sent after the required blocks and before its own END PRELUDE) already has
+    /// it in flight — the whole dump is written in one burst — so this window is only ever waited
+    /// out in full by a device that has genuinely finished without ever sending END PRELUDE.</summary>
+    const int DumpSettleWindowMs = 250;
+
     static async Task<VideohubState> ReadDumpAsync(StreamReader reader, CancellationToken ct)
     {
         var acc = new BlockAccumulator();
         var blocks = new List<ProtocolBlock>();
         var seen = new HashSet<string>(StringComparer.Ordinal);
-        while (await reader.ReadLineAsync(ct) is { } line)
+        while (true)
         {
+            var requiredComplete = DumpParser.RequiredHeaders.All(seen.Contains);
+            string? line;
+            if (!requiredComplete)
+            {
+                line = await reader.ReadLineAsync(ct);
+            }
+            else
+            {
+                // The required blocks are all in, but END PRELUDE hasn't arrived — do not return
+                // immediately (that's the bug this settles: a MultiView's CONFIGURATION block
+                // arrives after the required set and before its END PRELUDE). Keep reading, but
+                // only for a bounded settle window, so a device that never sends END PRELUDE at
+                // all (the case with no further blocks) still completes promptly rather than
+                // waiting out the full connect timeout.
+                using var settle = CancellationTokenSource.CreateLinkedTokenSource(ct);
+                settle.CancelAfter(DumpSettleWindowMs);
+                try
+                {
+                    line = await reader.ReadLineAsync(settle.Token);
+                }
+                catch (OperationCanceledException) when (!ct.IsCancellationRequested)
+                {
+                    // Only the settle window expired — the caller's own cancellation/connect
+                    // timeout (which would show up as ct.IsCancellationRequested) is left to
+                    // propagate untouched, exactly as it did before this method had a settle path.
+                    return DumpParser.Parse(blocks);
+                }
+            }
+
+            if (line is null)
+            {
+                // The connection closed. Before the required blocks arrive that's a genuine
+                // protocol failure; after, the dump is already complete and closing is just an
+                // unusual (but fine) way for a device to stop talking instead of settling quiet.
+                if (requiredComplete) return DumpParser.Parse(blocks);
+                throw new VideohubProtocolException("connection closed before the device dump completed");
+            }
+
             if (acc.Add(line) is not { } block) continue;
             blocks.Add(block);
             seen.Add(block.Header);
-            if (block.Header == "END PRELUDE" || DumpParser.RequiredHeaders.All(seen.Contains))
-                return DumpParser.Parse(blocks);
+            if (block.Header == "END PRELUDE") return DumpParser.Parse(blocks);
         }
-        throw new VideohubProtocolException("connection closed before the device dump completed");
     }
 
     /// <summary>Sends one protocol block and waits for the device's ACK.

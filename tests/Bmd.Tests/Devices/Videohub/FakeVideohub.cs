@@ -33,6 +33,10 @@ public sealed class FakeVideohub : IAsyncDisposable
     int[] _routes = [];
     char[] _locks = [];
     int _videoInputs;
+    // Device-specific blocks this fake doesn't model (e.g. a MultiView's CONFIGURATION),
+    // preserved verbatim in their original order so RenderDump() relays them faithfully —
+    // just like a real device, whose dump this fake is meant to stand in for.
+    List<(string Header, IReadOnlyList<string> Lines)> _extraBlocks = [];
 
     public int Port { get; }
 
@@ -158,6 +162,13 @@ public sealed class FakeVideohub : IAsyncDisposable
             if (index is int i && i >= 0 && i < videoOutputs && value.Length > 0)
                 _locks[i] = value[0];
         }
+
+        // Anything this fake has no typed field for (a MultiView's CONFIGURATION block, say) is
+        // kept verbatim and replayed by RenderDump() — same "unrecognised" boundary DumpParser
+        // uses, so the fake's notion of "extra" never drifts from the real parser's.
+        _extraBlocks = [.. blocks
+            .Where(b => !DumpParser.RecognisedHeaders.Contains(b.Header))
+            .Select(b => (b.Header, b.Lines))];
     }
 
     static void FillIndexed(ProtocolBlock block, string[] target)
@@ -213,6 +224,15 @@ public sealed class FakeVideohub : IAsyncDisposable
             sb.Append("VIDEO OUTPUT ROUTING:\n");
             for (var i = 0; i < _routes.Length; i++) sb.Append(i).Append(' ').Append(_routes[i]).Append('\n');
             sb.Append('\n');
+
+            // Replayed in their original position — after the standard blocks, before END
+            // PRELUDE — matching where a real device (e.g. a MultiView's CONFIGURATION) sends them.
+            foreach (var (header, lines) in _extraBlocks)
+            {
+                sb.Append(header).Append(":\n");
+                foreach (var line in lines) sb.Append(line).Append('\n');
+                sb.Append('\n');
+            }
 
             sb.Append("END PRELUDE:\n\n");
             return sb.ToString();

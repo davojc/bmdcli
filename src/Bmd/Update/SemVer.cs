@@ -8,7 +8,10 @@ namespace Bmd.Update;
 public readonly record struct SemVer(int Major, int Minor, int Patch, string PreRelease)
     : IComparable<SemVer>
 {
-    public bool IsPreRelease => PreRelease.Length > 0;
+    // Null-safe even though every string produced by TryParse is non-null: a plain `default(SemVer)`
+    // (a failed TryParse, or an uninitialized field elsewhere) leaves PreRelease null, and this type
+    // should not throw just for being asked its precedence status.
+    public bool IsPreRelease => !string.IsNullOrEmpty(PreRelease);
 
     /// <summary>Parses a version, tolerating a leading <c>v</c>/<c>V</c> (git tags carry one)
     /// and surrounding whitespace. Build metadata (<c>+…</c>) is discarded: semver says it takes
@@ -36,6 +39,9 @@ public readonly record struct SemVer(int Major, int Minor, int Patch, string Pre
                 if (part.Length == 0) return false;
                 foreach (var c in part)
                     if (!char.IsAsciiLetterOrDigit(c) && c != '-') return false;
+                // semver 2.0.0: numeric identifiers MUST NOT include leading zeroes. A bare "0"
+                // is fine; alphanumeric identifiers (e.g. "0abc") aren't numeric so are unaffected.
+                if (IsNumeric(part) && part.Length > 1 && part[0] == '0') return false;
             }
         }
 
@@ -51,11 +57,14 @@ public readonly record struct SemVer(int Major, int Minor, int Patch, string Pre
 
     /// <summary>Digits only, then <see cref="int.TryParse(string?, out int)"/>. The digit check
     /// rejects the signs and whitespace TryParse would otherwise accept; TryParse then rejects
-    /// anything too large for an int.</summary>
+    /// anything too large for an int. Also enforces the semver 2.0.0 rule that numeric identifiers
+    /// (major/minor/patch are numeric identifiers too) MUST NOT include leading zeroes — "0" alone
+    /// is fine, "01" is not.</summary>
     static bool TryNumber(string part, out int value)
     {
         value = 0;
         if (part.Length == 0) return false;
+        if (part.Length > 1 && part[0] == '0') return false;
         foreach (var c in part)
             if (!char.IsAsciiDigit(c)) return false;
         return int.TryParse(part, out value);
@@ -111,5 +120,5 @@ public readonly record struct SemVer(int Major, int Minor, int Patch, string Pre
     }
 
     public override string ToString() =>
-        PreRelease.Length == 0 ? $"{Major}.{Minor}.{Patch}" : $"{Major}.{Minor}.{Patch}-{PreRelease}";
+        string.IsNullOrEmpty(PreRelease) ? $"{Major}.{Minor}.{Patch}" : $"{Major}.{Minor}.{Patch}-{PreRelease}";
 }

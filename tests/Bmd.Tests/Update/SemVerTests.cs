@@ -15,6 +15,8 @@ public class SemVerTests
     [InlineData("1.2.3+build.5", 1, 2, 3, "")]
     [InlineData("1.2.3-rc.1+build.5", 1, 2, 3, "rc.1")]
     [InlineData("  1.2.3  ", 1, 2, 3, "")]
+    [InlineData("0.0.0", 0, 0, 0, "")]                // a bare "0" identifier is not a leading zero
+    [InlineData("1.2.3-rc.0", 1, 2, 3, "rc.0")]
     public void TryParse_AcceptsValidVersions(string raw, int major, int minor, int patch, string pre)
     {
         Assert.True(SemVer.TryParse(raw, out var version));
@@ -37,6 +39,10 @@ public class SemVerTests
     [InlineData("1.2.3-rc..1")]
     [InlineData("1.2.3-rc$1")]
     [InlineData("99999999999.0.0")] // overflows int
+    [InlineData("01.2.3")]          // semver 2.0.0: no leading zeroes in numeric identifiers
+    [InlineData("1.02.3")]
+    [InlineData("1.2.03")]
+    [InlineData("1.2.3-rc.01")]
     public void TryParse_RejectsInvalidVersions(string? raw)
     {
         Assert.False(SemVer.TryParse(raw, out _));
@@ -93,5 +99,16 @@ public class SemVerTests
     {
         Assert.True(SemVer.TryParse(raw, out var version));
         Assert.Equal(expected, version.ToString());
+    }
+
+    [Fact]
+    public void DefaultValue_IsSafeToInspect()
+    {
+        // A failed TryParse (or any other path that produces default(SemVer)) leaves PreRelease
+        // null — a plain record struct default, not one of TryParse's own "" values. Neither
+        // member should throw just because the value was never actually parsed.
+        var version = default(SemVer);
+        Assert.False(version.IsPreRelease);
+        Assert.Equal("0.0.0", version.ToString());
     }
 }

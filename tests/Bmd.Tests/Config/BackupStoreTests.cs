@@ -99,7 +99,7 @@ public class BackupStoreTests : IDisposable
     }
 
     [Fact]
-    public void Write_SucceedsEvenWhenPruneCannotDeleteReadOnlyFile()
+    public void Write_SurvivesAPruneItCannotComplete()
     {
         SetConfig("backup.keep", "1");
         SetConfig("backup.dir", BackupDir);
@@ -110,11 +110,23 @@ public class BackupStoreTests : IDisposable
         try
         {
             var second = store.Write("hub-a", Snapshot(new DateTimeOffset(2026, 8, 29, 10, 1, 0, TimeSpan.Zero)));
+
+            // The contract, and the only part that is the same everywhere: a mutation's backup
+            // succeeds whatever prune does afterwards. Prune tidies old snapshots; it is not
+            // allowed to take the new one down with it.
             Assert.True(File.Exists(second));
+
+            // What differs is whether prune had anything to survive, so assert that rather than
+            // let two platforms out of three pass without exercising anything. On Windows the
+            // read-only attribute blocks File.Delete, so the stale backup is still there and
+            // Prune swallowed the failure. On Unix, unlink is governed by the *directory's*
+            // write permission rather than the file's, so prune simply succeeded and the file
+            // is gone — which is also why the cleanup below has to be conditional.
+            Assert.Equal(OperatingSystem.IsWindows(), File.Exists(first));
         }
         finally
         {
-            File.SetAttributes(first, FileAttributes.Normal);
+            if (File.Exists(first)) File.SetAttributes(first, FileAttributes.Normal);
         }
     }
 

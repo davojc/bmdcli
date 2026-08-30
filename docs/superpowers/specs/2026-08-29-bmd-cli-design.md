@@ -417,11 +417,14 @@ semver against the embedded version, reports, exits 0.
      dir → clear error telling the user to re-run elevated.
 
 **Passive check (gh-style):** during any normal command, at most once per
-24 hours, a background task fetches the latest version and caches the result
+24 hours, a check runs concurrently with the command and caches the result
 in the OS cache dir (`~/.cache/bmd` on Unix, `%LOCALAPPDATA%\bmd` on
-Windows — note: cache, distinct from config). It never delays the command;
-network failures are silent. If a newer version exists, a two-line notice
-goes to **stderr after** the command output:
+Windows — note: cache, distinct from config). The command's own work is
+never blocked by it; at exit the process waits at most 500 ms for an
+in-flight check before printing, so a fast command still gets a result
+rather than killing the task on the way out. Network failures are silent.
+If a newer version exists, a two-line notice goes to **stderr after** the
+command output:
 
 ```
 A new release of bmd is available: 1.2.0 → 1.4.1

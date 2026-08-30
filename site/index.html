@@ -148,6 +148,17 @@ shasum -a 256 --ignore-missing -c checksums.txt</code></pre>
         <pre><code>bmd videohub route set --help</code></pre>
       </li>
     </ol>
+    <p>
+      Once bmd is installed, it keeps itself current: run <code>bmd update</code> to
+      install the newest release, or <code>bmd update --check</code> to see whether one
+      exists without changing anything. Downloads are verified against the release's
+      SHA-256 checksums before anything is replaced.
+    </p>
+    <p>
+      bmd also checks for a new release at most once a day and prints a one-line
+      reminder when one appears. To turn that off:
+      <code>bmd config set update.check false</code>.
+    </p>
   </section>
 
   <section id="guide">

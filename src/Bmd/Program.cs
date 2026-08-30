@@ -1,5 +1,6 @@
 using Bmd.Commands;
 using Bmd.Commands.Videohub;
+using Bmd.Update;
 using ConsoleAppFramework;
 
 var app = ConsoleApp.Create();
@@ -41,5 +42,12 @@ app.Add("update", update.Update);
 
 if (GroupHelp.TryWrite(args, Console.Out)) return 0;
 
+// The passive update check (see the spec's "Self-update") starts here so it overlaps the
+// command's own work, and prints at most a two-line stderr notice once the command is done.
+// It suppresses itself for --json, non-TTY stderr, `update`/`version`, and update.check = false.
+var notice = UpdateNoticeRunner.Start(args);
+
 app.Run(args);
+
+notice.WriteIfAny(Console.Error);
 return Environment.ExitCode;

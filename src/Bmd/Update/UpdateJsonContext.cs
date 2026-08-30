@@ -10,5 +10,7 @@ namespace Bmd.Update;
 /// Reflection-based serialization is forbidden project-wide (Native AOT), so every type
 /// crossing this boundary is registered here.</summary>
 [JsonSourceGenerationOptions(PropertyNamingPolicy = JsonKnownNamingPolicy.CamelCase)]
+[JsonSerializable(typeof(ReleaseInfo))]
+[JsonSerializable(typeof(ReleaseAsset))]
 [JsonSerializable(typeof(UpdateCheckEntry))]
 public partial class UpdateJsonContext : JsonSerializerContext;

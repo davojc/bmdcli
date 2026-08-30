@@ -74,7 +74,7 @@ public class UpdateCommands
                 return 0;
             }
 
-            throw new UpdateException("installing updates is not implemented yet");
+            return await InstallAsync(release, current, latest, json, ct);
         }
         catch (UpdateException ex)
         {
@@ -86,5 +86,95 @@ public class UpdateCommands
             Console.Error.WriteLine("error: cancelled");
             return 1;
         }
+    }
+
+    /// <summary>Downloads the asset for this platform, verifies it against the release's
+    /// checksums.txt, and swaps it into place. The order matters and is fixed by the spec:
+    /// nothing on disk beside the running binary is touched until the checksum matches.</summary>
+    async Task<int> InstallAsync(ReleaseInfo release, SemVer current, SemVer latest, bool json,
+        CancellationToken ct)
+    {
+        if (_executablePath is null)
+            throw new UpdateException(
+                "bmd could not determine its own location, so it cannot replace itself — " +
+                $"download the new version from {ReleaseClient.ReleasesPageUrl}");
+
+        if (_runtimeIdentifier is "unknown" or "")
+            throw new UpdateException(
+                "this build was not published for a specific platform, so bmd update cannot pick a " +
+                $"release asset — download the new version from {ReleaseClient.ReleasesPageUrl}");
+
+        var assetName = ReleaseInfo.ArchiveName(_runtimeIdentifier);
+        var asset = release.FindAsset(assetName)
+            ?? throw new UpdateException($"release {latest} has no asset named {assetName} for this platform");
+        var checksumsAsset = release.FindAsset(ReleaseInfo.ChecksumsAssetName)
+            ?? throw new UpdateException($"release {latest} has no {ReleaseInfo.ChecksumsAssetName} to verify the download against");
+
+        // A leftover .old from a previous Windows update, now that nothing holds it open.
+        UpdateInstaller.CleanUpPreviousUpdate(_executablePath);
+
+        // Staged beside the current executable, not in the system temp directory: the final move
+        // must be a same-volume rename to be atomic, and a cross-device move would not be.
+        var installDirectory = Path.GetDirectoryName(_executablePath)
+            ?? throw new UpdateException($"bmd could not determine the directory of {_executablePath}");
+        var staging = Path.Combine(installDirectory, $".bmd-update-{Guid.NewGuid():N}");
+
+        try
+        {
+            Directory.CreateDirectory(staging);
+        }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException)
+        {
+            throw new UpdateException(
+                $"cannot write to {installDirectory}: {ex.Message} — " +
+                "re-run bmd update from an elevated prompt, or reinstall bmd somewhere you can write");
+        }
+
+        try
+        {
+            Progress(json, $"Downloading bmd {latest} ({assetName})...");
+            var archivePath = Path.Combine(staging, assetName);
+            await _client.DownloadToFileAsync(asset.DownloadUrl, archivePath, ct);
+
+            var checksumsText = await _client.GetTextAsync(checksumsAsset.DownloadUrl, ct);
+            if (!Checksums.TryFind(checksumsText, assetName, out var expected))
+                throw new UpdateException(
+                    $"{ReleaseInfo.ChecksumsAssetName} for release {latest} lists no checksum for {assetName} — nothing was changed");
+
+            var actual = Checksums.OfFile(archivePath);
+            if (!actual.Equals(expected, StringComparison.Ordinal))
+                throw new UpdateException(
+                    $"checksum mismatch for {assetName}: expected {expected}, got {actual} — nothing was changed");
+            Progress(json, "Verified SHA-256 checksum.");
+
+            var extracted = UpdateInstaller.ExtractExecutable(archivePath, assetName, Path.Combine(staging, "unpacked"));
+            UpdateInstaller.Replace(extracted, _executablePath);
+        }
+        finally
+        {
+            TryDeleteDirectory(staging);
+        }
+
+        if (json)
+            Console.WriteLine(JsonSerializer.Serialize(
+                new UpdateResult(current.ToString(), latest.ToString(), true, _executablePath),
+                BmdJsonContext.Default.UpdateResult));
+        else
+            Console.WriteLine($"Updated bmd {current} → {latest} at {_executablePath}");
+        return 0;
+    }
+
+    /// <summary>Progress goes to stderr, never stdout: with --json, stdout must carry exactly one
+    /// document, and progress is not a result. Suppressed entirely under --json so a machine
+    /// reader's stderr stays clean.</summary>
+    static void Progress(bool json, string message)
+    {
+        if (!json) Console.Error.WriteLine(message);
+    }
+
+    static void TryDeleteDirectory(string path)
+    {
+        try { if (Directory.Exists(path)) Directory.Delete(path, recursive: true); }
+        catch (Exception ex) when (ex is IOException or UnauthorizedAccessException) { }
     }
 }

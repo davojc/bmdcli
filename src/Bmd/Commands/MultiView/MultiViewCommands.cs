@@ -135,11 +135,8 @@ public class MultiViewCommands
     static string? OutOfRange(string noun, int value, int count) =>
         value >= 1 && value <= count ? null : $"{noun} must be between 1 and {count}, not {value}";
 
-    /// <summary>Put a source in a view. Argument order is destination first, then source — view
-    /// then input, matching `videohub route set &lt;output&gt; &lt;input&gt;` and the device's own
-    /// front-panel convention. Both numbers are 1-based. On a MultiView 4, views 5 and 6 are the
-    /// Solo and Audio inputs rather than windows.</summary>
-    /// <param name="view">Destination: which view to change (1-based).</param>
+    /// <summary>Put a source in a view: destination first, then source, both 1-based.</summary>
+    /// <param name="view">Destination: which view to change (1-based). On a MultiView 4, views 5 and 6 are the Solo and Audio inputs rather than windows.</param>
     /// <param name="input">Source: which input to show in it (1-based).</param>
     /// <param name="host">Device address; defaults to config multiview.host.</param>
     /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
@@ -297,10 +294,8 @@ public class MultiViewCommands
     /// <summary>The display settings `show` accepts, for both validation and the error message.</summary>
     static readonly string[] ShowSettings = ["borders", "labels", "audio-meters", "tally"];
 
-    /// <summary>Set the multiview window layout, for example 2x2. bmd does not validate the
-    /// value: the CONFIGURATION block is undocumented and valid layouts differ by model and
-    /// firmware, so the device decides and any rejection is reported.</summary>
-    /// <param name="value">The layout to set. bmd sends whatever is given — the device, not bmd, validates it. Observed on a MultiView 4: 2x2.</param>
+    /// <summary>Set the multiview window layout, for example 2x2.</summary>
+    /// <param name="value">The layout to set. bmd sends whatever is given — the device, not bmd, validates it, because valid layouts differ by model and firmware. Observed on a MultiView 4: 2x2.</param>
     /// <param name="host">Device address; defaults to config multiview.host.</param>
     /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
@@ -312,9 +307,8 @@ public class MultiViewCommands
         bool noBackup = false, bool json = false)
         => SetPropertyAsync("Layout", value, host, port, timeout, noBackup, json);
 
-    /// <summary>Set the multiview output video format, for example 1080i5994. As with layout,
-    /// bmd sends the value and lets the device accept or reject it.</summary>
-    /// <param name="value">The format to set. bmd sends whatever is given — the device, not bmd, validates it. Observed on a MultiView 4: 1080i5994.</param>
+    /// <summary>Set the multiview output video format, for example 1080i5994.</summary>
+    /// <param name="value">The format to set. bmd sends whatever is given — the device, not bmd, validates it, as with layout. Observed on a MultiView 4: 1080i5994.</param>
     /// <param name="host">Device address; defaults to config multiview.host.</param>
     /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
@@ -326,10 +320,8 @@ public class MultiViewCommands
         bool noBackup = false, bool json = false)
         => SetPropertyAsync("Output format", value, host, port, timeout, noBackup, json);
 
-    /// <summary>Show one source full-screen, or leave solo mode. Passing a source number both
-    /// enables solo and points the Solo Input at that source; passing off disables solo and
-    /// leaves routing untouched.</summary>
-    /// <param name="value">A source number (1-based) to solo, or "off" to leave solo mode.</param>
+    /// <summary>Show one source full-screen, or leave solo mode.</summary>
+    /// <param name="value">A source number (1-based) to solo, or "off" to leave solo mode. A number both enables solo and points the Solo Input at that source; "off" disables solo and leaves routing untouched.</param>
     /// <param name="host">Device address; defaults to config multiview.host.</param>
     /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>
@@ -494,9 +486,7 @@ public class MultiViewCommands
             return 0;
         });
 
-    /// <summary>Stream device changes as they happen, including changes made by other controllers.
-    /// Numbering is 1-based. A direct copy of `videohub watch`, with view vocabulary in its
-    /// output: a route or lock update names the view's own current label alongside its number.</summary>
+    /// <summary>Stream device changes as they happen, including changes made by other controllers (1-based). Route and lock updates name the view's current label alongside its number.</summary>
     /// <param name="host">Device address; defaults to config multiview.host.</param>
     /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
     /// <param name="timeout">Connection timeout in seconds; defaults to config multiview.timeout, else 5. Watching itself never times out.</param>
@@ -548,9 +538,7 @@ public class MultiViewCommands
         _ => $"view {update.N} ({state.GetOutputLabel(update.N)}) lock: {update.From} → {update.To}",
     };
 
-    /// <summary>Export a verified snapshot of sources, views, routing and configuration
-    /// (1-based). Locks are not captured. Modelled on `videohub export`; the only MultiView
-    /// difference is capturing the CONFIGURATION block alongside labels and routing.</summary>
+    /// <summary>Export a verified snapshot of sources, views, routing and the CONFIGURATION block (1-based). Locks are not captured.</summary>
     /// <param name="file">Destination file; omit to write the snapshot JSON to stdout.</param>
     /// <param name="host">Device address; defaults to config multiview.host.</param>
     /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
@@ -617,13 +605,8 @@ public class MultiViewCommands
         }
     }
 
-    /// <summary>Apply a snapshot to the device, changing only what differs. Numbering is
-    /// 1-based. Modelled on `videohub restore`: labels and routing are converged the same way;
-    /// the MultiView difference is that once that plan is applied, any CONFIGURATION property
-    /// captured in the snapshot that differs from the device's current value is sent too. A
-    /// snapshot with no configuration section (every one written before this existed) leaves
-    /// configuration untouched.</summary>
-    /// <param name="file">Snapshot file to apply; use - to read from stdin.</param>
+    /// <summary>Apply a snapshot to the device, changing only what differs (1-based).</summary>
+    /// <param name="file">Snapshot file to apply; use - to read from stdin. Labels and routing are converged first, then any CONFIGURATION property that differs from the device's current value. A snapshot with no configuration section leaves configuration untouched.</param>
     /// <param name="host">Device address; defaults to config multiview.host.</param>
     /// <param name="port">Device TCP port; defaults to config multiview.port, else 9990.</param>
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config multiview.timeout, else 5.</param>

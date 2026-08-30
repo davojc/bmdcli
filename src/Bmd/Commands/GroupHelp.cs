@@ -10,9 +10,14 @@ namespace Bmd.Commands;
 /// creates a node for the group itself ("videohub", "config"): a bare `bmd videohub` or
 /// `bmd videohub --help` has no matching command and no group-specific help text to fall back
 /// to, so ConsoleAppFramework's generated router falls through to the full root listing instead
-/// of a filtered one. This class intercepts those two invocation shapes before `app.Run(args)`
+/// of a filtered one. This class intercepts those invocation shapes before `app.Run(args)`
 /// and prints a filtered listing built from a small static table of `(path, description)` pairs
-/// that mirrors the registrations in Program.cs.</summary>
+/// that mirrors the registrations in Program.cs.
+///
+/// <para>Root help (`bmd`, `bmd --help`, `bmd -h`) is intercepted here too. ConsoleAppFramework
+/// handled it, but listed all ~40 registrations flat with their full XML summaries — including
+/// the multi-line ones, rendered with this source file's own indentation. The root listing shows
+/// groups instead; a group's commands are one `--help` away.</para></summary>
 internal static class GroupHelp
 {
     internal readonly record struct Entry(string Path, string Description);
@@ -58,15 +63,33 @@ internal static class GroupHelp
         new("multiview restore", "Apply a snapshot, changing only what differs."),
     ];
 
-    static readonly string[] Groups = ["config", "videohub", "multiview"];
+    /// <summary>The command groups, each with the one-line description it gets in the root
+    /// listing, in the order they are listed.</summary>
+    static readonly Entry[] GroupDescriptions =
+    [
+        new("videohub", "Route and label a Videohub."),
+        new("multiview", "Drive a MultiView's views, layout and overlays."),
+        new("config", "Read and write bmd's own settings."),
+    ];
 
-    /// <summary>Attempts to handle `args` as `&lt;group&gt;` or `&lt;group&gt; --help`/`-h` for a
-    /// known command group. Returns false (and writes nothing) for anything else — an exact
-    /// command, an unknown group, root `--help`, or a bare/empty/unrecognized invocation — so
-    /// those cases fall through to ConsoleAppFramework unchanged.</summary>
+    static readonly string[] Groups = [.. GroupDescriptions.Select(g => g.Path)];
+
+    /// <summary>Commands that belong to no group. The root listing is their only listing, so
+    /// anything registered at the top level in Program.cs must appear here to stay discoverable.</summary>
+    static readonly Entry[] Ungrouped = [.. Commands.Where(c => !c.Path.Contains(' '))];
+
+    /// <summary>Attempts to handle `args` as root help (no arguments, `--help` or `-h`), or as
+    /// `[group]` / `[group] --help`/`-h` for a known command group. Returns false (and writes
+    /// nothing) for anything else — an exact command, an unknown group, `--version` — so those
+    /// cases fall through to ConsoleAppFramework unchanged.</summary>
     internal static bool TryWrite(string[] args, TextWriter writer)
     {
-        if (args.Length == 0) return false;
+        if (args.Length == 0 || (args.Length == 1 && args[0] is "--help" or "-h"))
+        {
+            WriteRoot(writer);
+            return true;
+        }
+
         var group = args[0];
         if (!Groups.Contains(group)) return false;
         if (args.Length > 1 && args[1] is not ("--help" or "-h")) return false;
@@ -76,11 +99,38 @@ internal static class GroupHelp
         if (entries.Length == 0) return false;
 
         var width = entries.Max(e => e.Path.Length);
-        writer.WriteLine($"Usage: {group} [command] [-h|--help] [--version]");
+        writer.WriteLine($"Usage: bmd {group} [command] [-h|--help]");
         writer.WriteLine();
         writer.WriteLine("Commands:");
         foreach (var entry in entries)
             writer.WriteLine($"  {entry.Path.PadRight(width)}    {entry.Description}");
+        writer.WriteLine();
+        writer.WriteLine("Run `bmd [command] --help` for a command's arguments and options.");
         return true;
+    }
+
+    /// <summary>The root listing: groups and ungrouped commands, never the ~40 individual
+    /// commands. ConsoleAppFramework's own root help printed every registration flat, each with
+    /// its full XML summary, which made the one screen a new user sees the least useful one.</summary>
+    static void WriteRoot(TextWriter writer)
+    {
+        var width = Math.Max(
+            GroupDescriptions.Max(g => g.Path.Length),
+            Ungrouped.Max(c => c.Path.Length));
+
+        writer.WriteLine("bmd — control Blackmagic Design devices over the network.");
+        writer.WriteLine();
+        writer.WriteLine("Usage: bmd [group] [command] [options]");
+        writer.WriteLine();
+        writer.WriteLine("Groups:");
+        foreach (var entry in GroupDescriptions)
+            writer.WriteLine($"  {entry.Path.PadRight(width)}    {entry.Description}");
+        writer.WriteLine();
+        writer.WriteLine("Commands:");
+        foreach (var entry in Ungrouped)
+            writer.WriteLine($"  {entry.Path.PadRight(width)}    {entry.Description}");
+        writer.WriteLine();
+        writer.WriteLine("Run `bmd <group> --help` to list a group's commands.");
+        writer.WriteLine("Run `bmd --version` to show this binary's version.");
     }
 }

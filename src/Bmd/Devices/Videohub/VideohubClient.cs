@@ -56,7 +56,14 @@ public sealed class VideohubClient : IAsyncDisposable
     /// but END PRELUDE has not arrived. A real device that has more to say (e.g. a MultiView's
     /// CONFIGURATION, sent after the required blocks and before its own END PRELUDE) already has
     /// it in flight — the whole dump is written in one burst — so this window is only ever waited
-    /// out in full by a device that has genuinely finished without ever sending END PRELUDE.</summary>
+    /// out in full by a device that has genuinely finished without ever sending END PRELUDE.
+    ///
+    /// This is an <b>idle gap</b>, not a total deadline: it is re-armed per read, so a device that
+    /// is still sending keeps being listened to. That is deliberate. A single 250 ms deadline for
+    /// the whole settle phase would truncate a slow-but-progressing device mid-dump and drop
+    /// exactly the trailing block this exists to capture. The pathological case — a device that
+    /// streams forever and never sends END PRELUDE — is bounded by the caller's connect timeout,
+    /// which is the correct outer bound for "this device is not behaving".</summary>
     const int DumpSettleWindowMs = 250;
 
     static async Task<VideohubState> ReadDumpAsync(StreamReader reader, CancellationToken ct)
@@ -76,10 +83,10 @@ public sealed class VideohubClient : IAsyncDisposable
             {
                 // The required blocks are all in, but END PRELUDE hasn't arrived — do not return
                 // immediately (that's the bug this settles: a MultiView's CONFIGURATION block
-                // arrives after the required set and before its END PRELUDE). Keep reading, but
-                // only for a bounded settle window, so a device that never sends END PRELUDE at
-                // all (the case with no further blocks) still completes promptly rather than
-                // waiting out the full connect timeout.
+                // arrives after the required set and before its END PRELUDE). Keep reading until
+                // the device goes quiet for DumpSettleWindowMs, so a device that never sends
+                // END PRELUDE at all still completes promptly rather than waiting out the full
+                // connect timeout. The window is re-armed per read by design — see the constant.
                 using var settle = CancellationTokenSource.CreateLinkedTokenSource(ct);
                 settle.CancelAfter(DumpSettleWindowMs);
                 try

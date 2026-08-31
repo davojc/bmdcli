@@ -153,6 +153,10 @@ public class MultiViewCommands
             if (OutOfRange("view", view, state.Device.VideoOutputs) is { } viewError)
             {
                 Console.Error.WriteLine($"error: {viewError}");
+                // A MultiView has many more sources than views, so an out-of-range view is very
+                // often the arguments the wrong way round rather than an absent window.
+                Console.Error.WriteLine(
+                    "  arguments are `view set <view> <input>` — destination first");
                 return 2;
             }
             if (OutOfRange("input", input, state.Device.VideoInputs) is { } inputError)

@@ -387,6 +387,12 @@ public class VideohubCommands
             if (output < 1 || output > device.VideoOutputs)
             {
                 Console.Error.WriteLine($"error: output must be between 1 and {device.VideoOutputs}");
+                // Unconditional, because on a square hub the ranges are identical and a swapped
+                // pair is indistinguishable from a correct one — there is nothing to detect, only
+                // something to remind. Offered whenever the destination is out of range, since
+                // that is the moment someone is most likely to have the order wrong.
+                Console.Error.WriteLine(
+                    "  arguments are `route set <output> <input>` — destination first");
                 return 2;
             }
             if (input < 1 || input > device.VideoInputs)

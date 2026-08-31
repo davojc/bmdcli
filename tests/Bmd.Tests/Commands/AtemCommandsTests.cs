@@ -28,8 +28,8 @@ public class AtemCommandsTests : IDisposable
         if (Directory.Exists(_directory)) Directory.Delete(_directory, recursive: true);
     }
 
-    AtemCommands Commands() =>
-        new(() => ConfigStore.Load(Path.Combine(_directory, "config"), _directory));
+    AtemCommands Commands(bool interactive = false) =>
+        new(() => ConfigStore.Load(Path.Combine(_directory, "config"), _directory), () => interactive);
 
     /// <summary>Backups land inside the test's own directory rather than the user's real state
     /// directory. Without this a mutation test writes a backup into the machine running it.</summary>
@@ -140,7 +140,7 @@ public class AtemCommandsTests : IDisposable
         await using var fake = FakeAtem.Start();
 
         Assert.Equal(0, await Commands().InputRename(
-            2, "Camera Two", @short: "CAM2", host: "127.0.0.1", port: fake.Port));
+            "2", "Camera Two", @short: "CAM2", host: "127.0.0.1", port: fake.Port));
 
         var text = _stdout.ToString();
         Assert.Contains("Camera Two", text);
@@ -156,7 +156,7 @@ public class AtemCommandsTests : IDisposable
         UseLocalBackups();
         await using var fake = FakeAtem.Start();
         Assert.Equal(0, await Commands().InputRename(
-            2, "Camera Two", host: "127.0.0.1", port: fake.Port, json: true));
+            "2", "Camera Two", host: "127.0.0.1", port: fake.Port, json: true));
 
         var backup = JsonDocument.Parse(_stdout.ToString().Trim())
             .RootElement.GetProperty("backup").GetString();
@@ -176,7 +176,7 @@ public class AtemCommandsTests : IDisposable
         UseLocalBackups();
         await using var fake = FakeAtem.Start();
         Assert.Equal(0, await Commands().InputRename(
-            2, "Camera Two", host: "127.0.0.1", port: fake.Port, noBackup: true));
+            "2", "Camera Two", host: "127.0.0.1", port: fake.Port, noBackup: true));
 
         Assert.Contains("Backup: skipped", _stdout.ToString());
     }
@@ -188,7 +188,7 @@ public class AtemCommandsTests : IDisposable
         UseLocalBackups();
         await using var fake = FakeAtem.Start();
         Assert.Equal(0, await Commands().InputRename(
-            1, "Presenter", host: "127.0.0.1", port: fake.Port));
+            "1", "Presenter", host: "127.0.0.1", port: fake.Port));
 
         Assert.Contains("No change", _stdout.ToString());
         Assert.Empty(fake.Commands);
@@ -201,14 +201,14 @@ public class AtemCommandsTests : IDisposable
     public async Task InputRename_RejectsAnOverlongNameBeforeConnecting(string? name, string? shortName)
     {
         // Exit 2, not 1: this is a usage error, and it is caught without touching the device.
-        Assert.Equal(2, await Commands().InputRename(1, name, @short: shortName, host: "127.0.0.1"));
+        Assert.Equal(2, await Commands().InputRename("1", name, @short: shortName, host: "127.0.0.1"));
         Assert.Contains("characters or fewer", _stderr.ToString());
     }
 
     [Fact]
     public async Task InputRename_RequiresAName()
     {
-        Assert.Equal(2, await Commands().InputRename(1, host: "127.0.0.1"));
+        Assert.Equal(2, await Commands().InputRename("1", host: "127.0.0.1"));
         Assert.Contains("give a new name", _stderr.ToString());
     }
 
@@ -216,7 +216,7 @@ public class AtemCommandsTests : IDisposable
     public async Task InputRename_RejectsASourceTheSwitcherDoesNotHave()
     {
         await using var fake = FakeAtem.Start();
-        Assert.Equal(1, await Commands().InputRename(99, "Nope", host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(1, await Commands().InputRename("99", "Nope", host: "127.0.0.1", port: fake.Port));
         Assert.Contains("no source 99", _stderr.ToString());
     }
 
@@ -226,7 +226,7 @@ public class AtemCommandsTests : IDisposable
         UseLocalBackups();
         await using var fake = FakeAtem.Start();
 
-        Assert.Equal(0, await Commands().AuxSet(1, 1, host: "127.0.0.1", port: fake.Port, json: true));
+        Assert.Equal(0, await Commands().AuxSet(1, "1", host: "127.0.0.1", port: fake.Port, json: true));
 
         using var doc = JsonDocument.Parse(_stdout.ToString().Trim());
         Assert.Equal(1, doc.RootElement.GetProperty("aux").GetInt32());
@@ -242,7 +242,7 @@ public class AtemCommandsTests : IDisposable
         // output on a switcher with more than one, and silently do nothing on this one.
         UseLocalBackups();
         await using var fake = FakeAtem.Start();
-        Assert.Equal(0, await Commands().AuxSet(1, 1, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(0, await Commands().AuxSet(1, "1", host: "127.0.0.1", port: fake.Port));
 
         var payload = Assert.Single(fake.Commands).Payload.ToArray();
         Assert.Equal(0, payload[1]);
@@ -252,7 +252,7 @@ public class AtemCommandsTests : IDisposable
     public async Task AuxSet_RejectsAnAuxTheSwitcherDoesNotHave()
     {
         await using var fake = FakeAtem.Start();
-        Assert.Equal(1, await Commands().AuxSet(2, 1, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(1, await Commands().AuxSet(2, "1", host: "127.0.0.1", port: fake.Port));
         Assert.Contains("aux must be between 1 and 1", _stderr.ToString());
     }
 
@@ -261,7 +261,7 @@ public class AtemCommandsTests : IDisposable
     {
         UseLocalBackups();
         await using var fake = FakeAtem.Start();
-        Assert.Equal(0, await Commands().AuxSet(1, 6, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(0, await Commands().AuxSet(1, "6", host: "127.0.0.1", port: fake.Port));
 
         Assert.Contains("No change", _stdout.ToString());
         Assert.Empty(fake.Commands);
@@ -272,7 +272,8 @@ public class AtemCommandsTests : IDisposable
     {
         UseLocalBackups();
         await using var fake = FakeAtem.Start();
-        Assert.Equal(0, await Commands().ProgramSet(1, host: "127.0.0.1", port: fake.Port, json: true));
+        Assert.Equal(0, await Commands().ProgramSet(
+            "1", force: true, host: "127.0.0.1", port: fake.Port, json: true));
 
         using var doc = JsonDocument.Parse(_stdout.ToString().Trim());
         Assert.Equal("program", doc.RootElement.GetProperty("bus").GetString());
@@ -285,7 +286,7 @@ public class AtemCommandsTests : IDisposable
     {
         UseLocalBackups();
         await using var fake = FakeAtem.Start();
-        Assert.Equal(0, await Commands().PreviewSet(4, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(0, await Commands().PreviewSet("4", host: "127.0.0.1", port: fake.Port));
 
         Assert.Equal("CPvI", Assert.Single(fake.Commands).Name);
         Assert.Contains("Stage", _stdout.ToString());
@@ -295,7 +296,8 @@ public class AtemCommandsTests : IDisposable
     public async Task ProgramSet_RejectsAMixEffectTheSwitcherDoesNotHave()
     {
         await using var fake = FakeAtem.Start();
-        Assert.Equal(1, await Commands().ProgramSet(1, mixEffect: 2, host: "127.0.0.1", port: fake.Port));
+        Assert.Equal(1, await Commands().ProgramSet(
+            "1", mixEffect: 2, force: true, host: "127.0.0.1", port: fake.Port));
         Assert.Contains("between 1 and 1", _stderr.ToString());
     }
 
@@ -308,7 +310,7 @@ public class AtemCommandsTests : IDisposable
         await using var fake = FakeAtem.Start(ignoreCommands: true);
 
         var exit = await Commands().InputRename(
-            2, "Camera Two", host: "127.0.0.1", port: fake.Port, timeout: 1);
+            "2", "Camera Two", host: "127.0.0.1", port: fake.Port, timeout: 1);
 
         Assert.Equal(1, exit);
         Assert.StartsWith("error: ", _stderr.ToString());
@@ -345,5 +347,83 @@ public class AtemCommandsTests : IDisposable
         Assert.StartsWith("error: ", _stderr.ToString());
         Assert.DoesNotContain("   at ", _stderr.ToString());
         Assert.Equal("", _stdout.ToString());
+    }
+
+    // ---- traps that are now guarded ---------------------------------------------------
+
+    [Fact]
+    public async Task ProgramSet_WithoutATerminal_RefusesToCutToAir()
+    {
+        // A program cut is live the instant it lands. With nothing to confirm at, refusing beats
+        // prompting into the void or quietly proceeding — a scheduled job should cut to air only
+        // where someone wrote --force and meant it. Exit 2: the fix is to change the command.
+        UseLocalBackups();
+        await using var fake = FakeAtem.Start();
+
+        var exit = await Commands(interactive: false).ProgramSet("1", host: "127.0.0.1", port: fake.Port);
+
+        Assert.Equal(2, exit);
+        Assert.Contains("refusing to cut to air", _stderr.ToString());
+        Assert.Contains("--force", _stderr.ToString());
+        Assert.Empty(fake.Commands);
+    }
+
+    [Fact]
+    public async Task PreviewSet_NeedsNoConfirmation()
+    {
+        // Preview changes nothing on air, so guarding it would be friction without a payoff.
+        UseLocalBackups();
+        await using var fake = FakeAtem.Start();
+
+        Assert.Equal(0, await Commands(interactive: false).PreviewSet(
+            "4", host: "127.0.0.1", port: fake.Port));
+        Assert.Equal("CPvI", Assert.Single(fake.Commands).Name);
+    }
+
+    [Theory]
+    [InlineData("Lyrics")]        // long name
+    [InlineData("LYRC")]          // short name
+    [InlineData("lyrics")]        // case-insensitive
+    [InlineData("6")]             // still the id
+    public async Task Commands_AcceptASourceByNameOrId(string source)
+    {
+        // An ATEM's ids are sparse — inputs 1-8, colour bars 1000, media player 3010 — so
+        // requiring an id means a lookup before every command.
+        UseLocalBackups();
+        await using var fake = FakeAtem.Start();
+
+        Assert.Equal(0, await Commands().AuxSet(1, source, host: "127.0.0.1", port: fake.Port));
+        Assert.Contains("No change: aux 1 already shows Lyrics.", _stdout.ToString());
+    }
+
+    [Fact]
+    public async Task Commands_AcceptAnInternalSourceByName()
+    {
+        UseLocalBackups();
+        await using var fake = FakeAtem.Start();
+
+        Assert.Equal(0, await Commands().AuxSet(1, "Color Bars", host: "127.0.0.1", port: fake.Port));
+        Assert.Contains("Aux 1 now shows 1000 (Color Bars)", _stdout.ToString());
+    }
+
+    [Fact]
+    public async Task Commands_RejectAnUnknownSourceName()
+    {
+        await using var fake = FakeAtem.Start();
+
+        Assert.Equal(1, await Commands().AuxSet(1, "Nonexistent", host: "127.0.0.1", port: fake.Port));
+        Assert.Contains("no source called 'Nonexistent'", _stderr.ToString());
+        Assert.Contains("bmd atem input list --all", _stderr.ToString());
+    }
+
+    [Fact]
+    public async Task InputRename_AcceptsTheInputsCurrentName()
+    {
+        UseLocalBackups();
+        await using var fake = FakeAtem.Start();
+
+        Assert.Equal(0, await Commands().InputRename(
+            "Lyrics", "Lyrics Desk", host: "127.0.0.1", port: fake.Port));
+        Assert.Contains("Renamed source 6 to 'Lyrics Desk'", _stdout.ToString());
     }
 }

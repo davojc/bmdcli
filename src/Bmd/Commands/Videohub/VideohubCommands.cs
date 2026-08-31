@@ -151,6 +151,54 @@ public class VideohubCommands
         _ => "lock",
     };
 
+    /// <summary>Write a self-contained HTML page showing what is routed to what: every source with the outputs it feeds, the full routing table, and which inputs are idle.</summary>
+    /// <param name="file">Destination file; omit to write the page to stdout.</param>
+    /// <param name="host">Device address; defaults to config videohub.host.</param>
+    /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
+    /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
+    /// <param name="json">Emit a summary object as JSON on stdout; requires a file.</param>
+    public Task<int> Diagram(
+        [Argument] string? file = null, string? host = null, int? port = null, int? timeout = null,
+        bool json = false)
+    {
+        if (json && file is null)
+        {
+            Console.Error.WriteLine("error: --json requires a file argument (the page itself goes to stdout without it)");
+            return Task.FromResult(2);
+        }
+
+        return _session.WithClientAsync(host, port, timeout, client =>
+        {
+            var state = client.State;
+            var page = RoutingPage.Render(state, client.Host, DateTimeOffset.UtcNow);
+
+            if (file is null)
+            {
+                Console.Write(page);
+                return 0;
+            }
+
+            File.WriteAllText(file, page);
+            var feeds = RoutingPage.Feeds(state).Count;
+            var idle = RoutingPage.IdleInputs(state).Count;
+            if (json)
+            {
+                Console.WriteLine(JsonSerializer.Serialize(
+                    new VideohubDiagramResult(
+                        state.Device.ModelName, state.Device.VideoInputs, state.Device.VideoOutputs,
+                        feeds, idle, file),
+                    BmdJsonContext.Default.VideohubDiagramResult));
+            }
+            else
+            {
+                Console.WriteLine(
+                    $"Wrote {state.Device.VideoOutputs} outputs from {feeds} sources " +
+                    $"({idle} inputs idle) → {file}");
+            }
+            return 0;
+        });
+    }
+
     /// <summary>Export a verified snapshot of labels and routing (1-based). Locks are not captured.</summary>
     /// <param name="file">Destination file; omit to write the snapshot JSON to stdout.</param>
     /// <param name="host">Device address; defaults to config videohub.host.</param>

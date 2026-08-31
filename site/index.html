@@ -295,6 +295,7 @@ untouched.</span></code></pre>
         <button type="button" role="tab" id="t-lock" aria-controls="p-lock" aria-selected="false">output lock</button>
 
         <p class="explorer-group">Saving &amp; labels</p>
+        <button type="button" role="tab" id="t-diagram" aria-controls="p-diagram" aria-selected="false">diagram</button>
         <button type="button" role="tab" id="t-export" aria-controls="p-export" aria-selected="false">export</button>
         <button type="button" role="tab" id="t-restore" aria-controls="p-restore" aria-selected="false">restore</button>
         <button type="button" role="tab" id="t-rename" aria-controls="p-rename" aria-selected="false">input rename</button>
@@ -367,6 +368,13 @@ Backup: …/20260829-143512.json</code></pre>
           <h3>Stop anyone else touching an output</h3>
           <p>Locks live on the device and are shared with every other controller, so a locked output stays locked for the front panel too. <code>output unlock</code> releases it.</p>
           <pre class="cmd"><code>bmd videohub output lock 4</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-diagram" aria-labelledby="t-diagram" hidden>
+          <h3>Draw what is routed to what</h3>
+          <p>Writes a single HTML page showing every source with the outputs it feeds, the whole routing table, and which inputs are sitting idle. No scripts and no web fonts, so it opens on a rack-room machine with no network — and prints.</p>
+          <pre class="cmd"><code>bmd videohub diagram rack.html</code></pre>
+          <pre class="cmd cmd-out"><code>Wrote 40 outputs from 18 sources (22 inputs idle) → rack.html</code></pre>
         </div>
 
         <div role="tabpanel" id="p-export" aria-labelledby="t-export" hidden>

@@ -204,6 +204,16 @@ assume one device means one function.
 bmd atem input list --json | jq -r '.[] | select(.name == "") | .id'
 ```
 
+**Draw the current routing as a page you can send someone.**
+
+```
+bmd videohub diagram rack.html
+```
+
+One self-contained HTML file — no scripts, no web fonts, nothing to fetch — showing each source
+with the outputs it feeds, the full routing table, and which inputs are idle. `--json` reports a
+summary of what it wrote instead of the page.
+
 **Snapshot before a show, restore after.**
 
 ```

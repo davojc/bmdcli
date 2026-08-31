@@ -27,6 +27,7 @@ app.Add("videohub output list", videohub.OutputList);
 app.Add("videohub route list", videohub.RouteList);
 app.Add("videohub watch", videohub.Watch);
 app.Add("videohub export", videohub.Export);
+app.Add("videohub diagram", videohub.Diagram);
 app.Add("videohub restore", videohub.Restore);
 app.Add("videohub route set", videohub.RouteSet);
 app.Add("videohub input rename", videohub.InputRename);

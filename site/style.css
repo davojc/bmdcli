@@ -1061,3 +1061,195 @@ footer .disclaimer {
 @media (prefers-reduced-motion: reduce) {
   .terminal-hero { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
 }
+
+/* ---------- Outcomes ----------
+   The landing page's centre of gravity moved from "what it is" to "what you get
+   to do", because the person deciding whether to download this runs a video
+   rack rather than a build pipeline. Each card is one job, in the words someone
+   would use to describe it to a colleague, with the single line that does it. */
+
+.outcomes {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(17rem, 1fr));
+}
+
+.outcomes li {
+  display: flex;
+  flex-direction: column;
+  padding: 1.35rem 1.4rem 1.15rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.outcomes h3 {
+  margin: 0 0 0.55rem;
+  font-size: 1.15rem;
+  font-weight: 600;
+  color: var(--fg);
+}
+
+.outcomes p {
+  margin: 0;
+  color: var(--fg-dim);
+  font-size: 0.97rem;
+}
+
+/* The command sits at the foot of the card, pinned there so a row of cards keeps
+   its commands on one line however unequal the prose above them is. */
+.outcome-cmd {
+  margin-top: auto !important;
+  padding-top: 1rem;
+}
+
+.outcome-cmd code {
+  display: block;
+  padding: 0.5rem 0.7rem;
+  border-radius: 7px;
+  background: var(--term-bg);
+  border: 1px solid var(--line-soft);
+  color: var(--fg);
+  font-size: 0.8rem;
+  white-space: nowrap;
+  overflow-x: auto;
+}
+
+/* ---------- The AI section ---------- */
+
+.ai-grid {
+  display: grid;
+  gap: 1rem;
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
+  margin-bottom: 1.75rem;
+}
+
+.ai-step {
+  padding: 1.25rem 1.35rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--panel);
+}
+
+.ai-step h3 {
+  margin: 0 0 0.5rem;
+  font-size: 1.05rem;
+  font-weight: 600;
+}
+
+.ai-step p {
+  margin: 0;
+  font-size: 0.95rem;
+  color: var(--fg-dim);
+}
+
+.ai-step .outcome-cmd { padding-top: 0.9rem; }
+
+/* Numbered because these genuinely are a sequence — label, then install, then ask
+   — rather than three parallel features. */
+.step-no {
+  margin: 0 0 0.75rem !important;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  color: var(--signal);
+}
+
+.ai-demo { margin: 0; border-radius: 12px; overflow: hidden; border: 1px solid var(--line); }
+.ai-demo pre { margin: 0; padding: 1.1rem 1.2rem 1.35rem; overflow-x: auto; font-size: 0.82rem; line-height: 1.65; }
+
+/* What the operator asked for, in their own words, set apart from what ran. */
+.ask {
+  display: block;
+  color: var(--fg);
+  border-left: 2px solid var(--signal);
+  padding-left: 0.85rem;
+}
+
+/* ---------- Command explorer ----------
+   Fifteen commands as a flat list was a wall that said "this is for programmers".
+   One at a time says the same thing to the person who wants it and nothing to the
+   person who does not. */
+
+.explorer { display: grid; gap: 1.25rem; }
+
+.explorer-list {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 0.4rem;
+  align-content: start;
+}
+
+.explorer-group {
+  width: 100%;
+  margin: 0.6rem 0 0.1rem !important;
+  font-family: var(--font-mono);
+  font-size: 0.65rem !important;
+  font-weight: 600;
+  letter-spacing: 0.18em;
+  text-transform: uppercase;
+  color: var(--fg-faint);
+}
+
+.explorer-group:first-child { margin-top: 0 !important; }
+
+.explorer-list button {
+  font-family: var(--font-mono);
+  font-size: 0.8rem;
+  color: var(--fg-dim);
+  background: var(--panel);
+  border: 1px solid var(--line-soft);
+  border-radius: 8px;
+  padding: 0.4rem 0.7rem;
+  cursor: pointer;
+  text-align: left;
+}
+
+.explorer-list button:hover { color: var(--fg); border-color: var(--line); }
+
+.explorer-list button[aria-selected="true"] {
+  color: var(--signal-ink);
+  background: var(--signal);
+  border-color: var(--signal);
+  font-weight: 600;
+}
+
+/* Without JavaScript the buttons are inert, so they must not pretend otherwise:
+   only the enhanced version claims to be a picker. */
+.explorer:not(.is-live) .explorer-list { display: none; }
+
+.explorer-panels > [role="tabpanel"] {
+  border: 1px solid var(--line-soft);
+  border-radius: 12px;
+  background: var(--panel);
+  padding: 1.35rem 1.4rem;
+}
+
+.explorer:not(.is-live) .explorer-panels {
+  display: grid;
+  gap: 1rem;
+}
+
+.explorer-panels h3 { margin: 0 0 0.6rem; font-size: 1.1rem; }
+.explorer-panels p { margin: 0 0 0.9rem; color: var(--fg-dim); font-size: 0.97rem; }
+.explorer-panels p:last-child { margin-bottom: 0; }
+.explorer-panels pre.cmd { margin: 0 0 0.75rem; }
+.explorer-panels pre.cmd:last-child { margin-bottom: 0; }
+
+@media (min-width: 56rem) {
+  /* The list becomes a column beside the detail, which is what makes it read as a
+     picker rather than a row of filters. */
+  .explorer {
+    grid-template-columns: minmax(11rem, 15rem) minmax(0, 1fr);
+    gap: 2rem;
+    align-items: start;
+  }
+
+  .explorer.is-live .explorer-list { flex-direction: column; }
+  .explorer.is-live .explorer-list button { width: 100%; }
+  .explorer:not(.is-live) { grid-template-columns: minmax(0, 1fr); }
+}

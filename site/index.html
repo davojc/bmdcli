@@ -4,7 +4,7 @@
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
 <title>bmd — drive the rack from the keyboard</title>
-<meta name="description" content="bmd — command-line control for Blackmagic Videohub routers, MultiView multiviewers and ATEM switchers. One native binary, no runtime, no SDK, and every command speaks JSON.">
+<meta name="description" content="bmd — control Blackmagic Videohub routers, MultiView multiviewers and ATEM switchers from one small program. Save a show and put it back, label once, and let an AI set the room up from plain English.">
 <meta name="theme-color" content="#0c0d10">
 <link rel="icon" href="favicon.svg" type="image/svg+xml">
 <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -22,20 +22,17 @@
       <div class="hero-copy">
         <h1>Drive the <em>rack</em> from the keyboard.</h1>
         <p class="lede">
-          Routers, multiviewers and switchers, from one native binary — no runtime, no SDK,
-          nothing to install alongside it. <strong>Ten seconds to air is no time to be hunting
-          for a mouse.</strong>
+          Routers, multiviewers and switchers, from one small program that runs anywhere —
+          the desk, a laptop in the truck, a phone over SSH.
+          <strong>Ten seconds to air is no time to be hunting for a mouse.</strong>
         </p>
 
         <div class="cta-row">
           <a class="btn btn-primary" href="#download">Download</a>
-          <a class="btn" href="videohub.html">Read the guides</a>
+          <a class="btn" href="#can-do">What it does</a>
         </div>
       </div>
 
-      <!-- Product as hero. The previous version put an abstract matrix and a bulleted
-           feature list side by side, so nothing carried the section. This is a real
-           session against a real 40x40 on a real network: the thing itself, at size. -->
       <div class="terminal terminal-hero">
         <div class="term-bar" aria-hidden="true">
           <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
@@ -57,8 +54,6 @@ Blackmagic Smart Videohub 40 x 40  videohub  192.168.4.100:9990</span>
 Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-40/20260829-143512.json</span></code></pre>
       </div>
 
-      <!-- Devices, demoted out of the headline's way. Four short chips say what is
-           supported faster than four sentences did. -->
       <ul class="devices">
         <li class="is-ready"><b>Videohub</b><span>routing · labels · locks · backups · watch</span></li>
         <li class="is-ready"><b>MultiView</b><span>views · layout · format · overlays · solo</span></li>
@@ -68,17 +63,132 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
     </div>
   </header>
 
-  <section id="routing">
-    <h2>Routing is a coordinate.</h2>
+  <section id="can-do">
+    <h2>What you can actually do with it.</h2>
     <p class="section-lede">
-      Every device here is a grid underneath: outputs down one side, inputs across the other, one
-      crosspoint lit per output. <code>route set 4 13</code> names a cell in it — destination
-      first, then source, the same order the front panel asks for.
+      Everything below is one line typed at a prompt. No SDK, no scripting language to learn, and
+      nothing installed on the device.
     </p>
 
-    <!-- The matrix earns its place as an explainer rather than as hero decoration:
-         the state shown is the session above — outputs 1-3 on input 1, output 5 on
-         input 13, and output 4 moving from input 3 to input 13. -->
+    <ul class="outcomes">
+      <li>
+        <h3>Set the room before doors open</h3>
+        <p>
+          Save a working state once — every route, every label — and put it back in one go, the
+          morning after somebody &ldquo;had a quick look&rdquo; at the rack.
+        </p>
+        <p class="outcome-cmd"><code>bmd videohub restore sunday-service.json</code></p>
+      </li>
+      <li>
+        <h3>Undo whatever just happened</h3>
+        <p>
+          Every change writes the device's previous state to disk first. There is always a file
+          from thirty seconds ago, and it is only ever a restore away.
+        </p>
+        <p class="outcome-cmd"><code>Backup: …/20260829-143512.json</code></p>
+      </li>
+      <li>
+        <h3>Label once, and everything agrees</h3>
+        <p>
+          Names go onto the hardware, not into a config on your laptop. The front panel, the
+          multiviewer, and everyone else's control app all read the same thing.
+        </p>
+        <p class="outcome-cmd"><code>bmd videohub input rename 3 "Lectern Cam"</code></p>
+      </li>
+      <li>
+        <h3>Change a feed without walking to the rack</h3>
+        <p>
+          From the desk, from the truck, from a laptop on the other side of the building. It is
+          one small program and a network connection.
+        </p>
+        <p class="outcome-cmd"><code>bmd atem aux set 1 "Stage Wide"</code></p>
+      </li>
+      <li>
+        <h3>See what changed, and when</h3>
+        <p>
+          Watch the device live, including changes somebody else made from the front panel or
+          another controller. Useful at the time, and more useful afterwards.
+        </p>
+        <p class="outcome-cmd"><code>bmd videohub watch</code></p>
+      </li>
+      <li>
+        <h3>Let the show run itself</h3>
+        <p>
+          Because it is one line at a prompt, it is also one line in a cue script, a scheduled
+          job, or a button on a stream deck.
+        </p>
+        <p class="outcome-cmd"><code>bmd videohub route set 7 2</code></p>
+      </li>
+    </ul>
+  </section>
+
+  <section id="ai">
+    <h2>Label your network well, and an AI can run it.</h2>
+    <p class="section-lede">
+      This is the part that surprises people. bmd was built so that a person and an AI assistant
+      drive the <em>same</em> tool — and the thing that makes an assistant genuinely useful is
+      something you control completely: <strong>what you called everything.</strong>
+    </p>
+
+    <div class="ai-grid">
+      <div class="ai-step">
+        <p class="step-no">1</p>
+        <h3>Name things the way you'd say them out loud</h3>
+        <p>
+          <code>SDI 7</code> tells an assistant nothing. <code>Lectern Cam</code> tells it
+          everything. Labels live on the hardware, so this is a one-off job that every device and
+          every operator then benefits from.
+        </p>
+      </div>
+      <div class="ai-step">
+        <p class="step-no">2</p>
+        <h3>Give the assistant the manual</h3>
+        <p>
+          One command installs everything an AI needs to know about bmd — the commands, the
+          conventions, and the mistakes to avoid — as a skill it loads only when you are actually
+          talking about video.
+        </p>
+        <p class="outcome-cmd"><code>bmd agents --skill</code></p>
+      </div>
+      <div class="ai-step">
+        <p class="step-no">3</p>
+        <h3>Ask for what you want</h3>
+        <p>
+          It reads your labels, works out which device does what, and makes the changes — backing
+          each one up on the way, so anything it does can be undone.
+        </p>
+      </div>
+    </div>
+
+    <div class="terminal ai-demo">
+      <div class="term-bar" aria-hidden="true">
+        <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
+        <span class="term-title">assistant</span>
+      </div>
+<pre><code><span class="ask">Put the lectern camera on both foyer screens, and give the
+stage monitor the wide shot. Leave the recording feed alone.</span>
+<span class="cmd-gap"></span><span class="out muted">Reading labels from 2 devices…</span>
+<span class="out"><span class="prompt-sign">$</span> bmd videohub route set 6 3    <span class="muted"># Foyer Screen L ← Lectern Cam</span>
+<span class="prompt-sign">$</span> bmd videohub route set 7 3    <span class="muted"># Foyer Screen R ← Lectern Cam</span>
+<span class="prompt-sign">$</span> bmd atem aux set 1 "Stage Wide"</span>
+<span class="cmd-gap"></span><span class="out">Done. Three changes, all backed up. Recording feed on output 12
+untouched.</span></code></pre>
+    </div>
+    <p class="demo-note">
+      An illustration of the shape of it, not a transcript. The assistant is whichever one you
+      already use; bmd's part is being legible enough for it to drive — every command returns
+      structured output, and nothing reports success it did not verify.
+    </p>
+  </section>
+
+  <section id="grid">
+    <h2>It's the same grid you already think in.</h2>
+    <p class="section-lede">
+      A router is inputs down one side and outputs across the other, with one crosspoint lit per
+      output. <code>route set 4 13</code> is just a coordinate in it — destination first, then
+      source, the same order the front panel asks for.
+    </p>
+
     <div class="matrix">
       <div class="matrix-head">
         <span>Out &darr; / In &rarr;</span>
@@ -100,24 +210,11 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
     </div>
   </section>
 
-  <section id="agents">
-    <h2>Operators and agents drive the same tool.</h2>
-    <p class="section-lede">
-      Every command takes <code>--json</code> and returns exactly one document with stable field
-      names. Exit codes mean the same thing everywhere: <code>0</code> worked, <code>1</code> the
-      operation failed, <code>2</code> the command was wrong. Errors go to stderr either way, so
-      nothing has to read stdout to find out whether it succeeded.
-    </p>
-    <pre class="cmd"><code>bmd agents --skill</code></pre>
-    <p class="demo-note">
-      Installs the whole contract as an agent skill, loaded only when a task actually involves
-      Blackmagic hardware — never into your project's own instructions file.
-    </p>
-  </section>
-
   <section id="download">
     <h2>Download</h2>
-    <p class="section-lede">Prebuilt, single-file native binaries. No .NET runtime to install.</p>
+    <p class="section-lede">
+      One file. Nothing to install alongside it, no runtime, no admin rights.
+    </p>
     <ul class="downloads">
       <li>
         <a class="download-link" data-platform="win-x64"
@@ -156,113 +253,182 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
       </li>
     </ul>
     <p class="verify">
-      Unzip it, put it on your <code>PATH</code>, and you're done. Verifying the download against
-      its published checksums, the macOS first-run block, and how updates work are all on the
-      <a href="install.html">install page</a>.
+      Unzip it, put it somewhere on your <code>PATH</code>, and point it at a device:
+      <code>bmd discover --add</code>. Checksums, the macOS first-run block and updates are all on
+      the <a href="install.html">install page</a>.
     </p>
   </section>
 
-  <section id="using">
-    <h2>The whole vocabulary.</h2>
-
-    <p class="section-lede">Point bmd at a device once — it remembers, for your user, wherever you run it.</p>
-    <pre class="cmd"><code>bmd discover --add</code></pre>
-    <p class="demo-note">
-      Or set the address by hand:
-      <code>bmd config set videohub.host 192.168.1.50</code>. Add <code>--project</code> to pin a
-      device to the current folder instead, or a <code>--context</code> to keep a second device of
-      the same type alongside the first.
+  <!-- The technical detail, deliberately below the fold and behind one click each:
+       findable when wanted, not in the way of someone deciding whether this is for
+       them. Without JavaScript every panel is simply visible. -->
+  <section id="commands">
+    <h2>Every command, one at a time.</h2>
+    <p class="section-lede">
+      Pick one to see what it does. Numbers match the front panel and start at 1, and every
+      command also explains itself with <code>--help</code>.
     </p>
 
-    <p>
-      Inputs and outputs are numbered the way the front panel numbers them, starting at 1.
-    </p>
+    <div class="explorer" id="explorer">
+      <div class="explorer-list" role="tablist" aria-label="bmd commands">
+        <p class="explorer-group" id="grp-start">Getting started</p>
+        <button type="button" role="tab" id="t-discover" aria-controls="p-discover" aria-selected="true">discover</button>
+        <button type="button" role="tab" id="t-config" aria-controls="p-config" aria-selected="false">config set</button>
+        <button type="button" role="tab" id="t-context" aria-controls="p-context" aria-selected="false">context set</button>
 
-    <dl class="commands">
-      <div>
-        <dt>bmd videohub route list</dt>
-        <dd>What is feeding each output, right now.</dd>
-      </div>
-      <div>
-        <dt>bmd videohub route set 4 13</dt>
-        <dd>Send input 13 to output 4 — destination first, then source.</dd>
-      </div>
-      <div>
-        <dt>bmd videohub info</dt>
-        <dd>Model, protocol version, and how many inputs and outputs the hub has.</dd>
-      </div>
-      <div>
-        <dt>bmd videohub input list</dt>
-        <dd>Input numbers and their labels. <code>output list</code> does the same for outputs, plus their lock state.</dd>
-      </div>
-      <div>
-        <dt>bmd videohub input rename 3 "Camera 2"</dt>
-        <dd>Relabel a source on the device itself, so the front panel agrees with you.</dd>
-      </div>
-      <div>
-        <dt>bmd videohub output lock 4</dt>
-        <dd>Stop anyone else re-routing output 4. <code>output unlock 4</code> releases it.</dd>
-      </div>
-      <div>
-        <dt>bmd videohub export show.json</dt>
-        <dd>Save every label and route to a file, verified against the hub. Leave the filename off to write to stdout.</dd>
-      </div>
-      <div>
-        <dt>bmd videohub restore show.json</dt>
-        <dd>Put that state back, changing only what differs. Add <code>--dry-run</code> to see the plan first.</dd>
-      </div>
-      <div>
-        <dt>bmd videohub watch</dt>
-        <dd>Stream changes as they happen — including ones made from the front panel or another controller.</dd>
-      </div>
-      <div>
-        <dt>bmd discover</dt>
-        <dd>Find Blackmagic devices on the local network.</dd>
-      </div>
-      <div>
-        <dt>bmd multiview view set 1 3</dt>
-        <dd>Put source 3 in view 1 of a MultiView — destination first, then source. See the <a href="multiview.html">MultiView guide</a> for the rest of that command group.</dd>
-      </div>
-      <div>
-        <dt>bmd multiview layout 2x2</dt>
-        <dd>Set the window layout; <code>format</code> sets the output video format the same way. The device validates the value, not bmd.</dd>
-      </div>
-      <div>
-        <dt>bmd atem input rename 2 "Camera Two"</dt>
-        <dd>Name an input on an ATEM, so the label shows up in its multiviewer and in every other controller. See the <a href="atem.html">ATEM guide</a>.</dd>
-      </div>
-      <div>
-        <dt>bmd atem aux set 1 Stage</dt>
-        <dd>Point auxiliary output 1 at a source, by name or by id — the usual feed for a stage monitor or a recorder.</dd>
-      </div>
-      <div>
-        <dt>bmd atem context set gallery</dt>
-        <dd>Choose which of several switchers the commands act on. <code>context list</code> shows them all.</dd>
-      </div>
-      <div>
-        <dt>--json</dt>
-        <dd>On any command. One JSON document on stdout with stable field names, so scripts and agents can read it.</dd>
-      </div>
-    </dl>
+        <p class="explorer-group">Routing</p>
+        <button type="button" role="tab" id="t-routelist" aria-controls="p-routelist" aria-selected="false">route list</button>
+        <button type="button" role="tab" id="t-routeset" aria-controls="p-routeset" aria-selected="false">route set</button>
+        <button type="button" role="tab" id="t-lock" aria-controls="p-lock" aria-selected="false">output lock</button>
 
-    <p>
-      Every command explains itself, including units, ranges and defaults:
-    </p>
-    <pre class="cmd"><code>bmd videohub route set --help</code></pre>
-    <p class="verify">
-      Anything that changes a device snapshots it first, so there is always a way back — see
-      <a href="videohub.html#backups">backups</a> in the guide.
-    </p>
+        <p class="explorer-group">Saving &amp; labels</p>
+        <button type="button" role="tab" id="t-export" aria-controls="p-export" aria-selected="false">export</button>
+        <button type="button" role="tab" id="t-restore" aria-controls="p-restore" aria-selected="false">restore</button>
+        <button type="button" role="tab" id="t-rename" aria-controls="p-rename" aria-selected="false">input rename</button>
+        <button type="button" role="tab" id="t-watch" aria-controls="p-watch" aria-selected="false">watch</button>
+
+        <p class="explorer-group">MultiView &amp; ATEM</p>
+        <button type="button" role="tab" id="t-viewset" aria-controls="p-viewset" aria-selected="false">view set</button>
+        <button type="button" role="tab" id="t-layout" aria-controls="p-layout" aria-selected="false">layout</button>
+        <button type="button" role="tab" id="t-aux" aria-controls="p-aux" aria-selected="false">aux set</button>
+        <button type="button" role="tab" id="t-program" aria-controls="p-program" aria-selected="false">program set</button>
+
+        <p class="explorer-group">For assistants</p>
+        <button type="button" role="tab" id="t-agents" aria-controls="p-agents" aria-selected="false">agents</button>
+        <button type="button" role="tab" id="t-json" aria-controls="p-json" aria-selected="false">--json</button>
+      </div>
+
+      <div class="explorer-panels">
+        <div role="tabpanel" id="p-discover" aria-labelledby="t-discover">
+          <h3>Find the gear on your network</h3>
+          <p>Asks the local network what Blackmagic devices are out there. Add <code>--add</code> to pick one and remember it, so you never type its address again.</p>
+          <pre class="cmd"><code>bmd discover --add</code></pre>
+          <pre class="cmd cmd-out"><code>NAME                               TYPE      ADDRESS
+Blackmagic Smart Videohub 40 x 40  videohub  192.168.4.100:9990
+Blackmagic MultiView 4             multiview 192.168.4.96:9990
+Blackmagic ATEM Television Studio  atem      192.168.4.98:9910</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-config" aria-labelledby="t-config" hidden>
+          <h3>Point bmd at a device by hand</h3>
+          <p>For when you already know the address, or discovery cannot reach it across a subnet. Remembered for your user, wherever you run it.</p>
+          <pre class="cmd"><code>bmd config set videohub.host 192.168.1.50</code></pre>
+          <p>Add <code>--project</code> to pin one folder to one device instead — handy when a show lives in its own directory.</p>
+        </div>
+
+        <div role="tabpanel" id="p-context" aria-labelledby="t-context" hidden>
+          <h3>Work with more than one of the same thing</h3>
+          <p>Two switchers, two routers? Give each a name, then switch between them. Anything that changes a device tells you which one it acted on.</p>
+          <pre class="cmd"><code>bmd atem context list
+bmd atem context set gallery</code></pre>
+          <pre class="cmd cmd-out"><code>   CONTEXT  HOST
+*  default  192.168.4.98
+   gallery  192.168.4.30</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-routelist" aria-labelledby="t-routelist" hidden>
+          <h3>See what is feeding what</h3>
+          <p>The whole routing table, with the labels rather than bare numbers.</p>
+          <pre class="cmd"><code>bmd videohub route list</code></pre>
+          <pre class="cmd cmd-out"><code>OUT  OUTPUT LABEL            IN  INPUT LABEL
+1    Projector AR            1   FoH Sw PGM
+2    Projector AL            1   FoH Sw PGM
+3    Stage Screen            1   FoH Sw PGM</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-routeset" aria-labelledby="t-routeset" hidden>
+          <h3>Send a source somewhere</h3>
+          <p><strong>Destination first, then source</strong> — the same order the front panel asks for. This sends input 13 to output 4.</p>
+          <pre class="cmd"><code>bmd videohub route set 4 13</code></pre>
+          <pre class="cmd cmd-out"><code>output 4 (FoH MV 1): FoH Sw MV → Switcher PGM
+Backup: …/20260829-143512.json</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-lock" aria-labelledby="t-lock" hidden>
+          <h3>Stop anyone else touching an output</h3>
+          <p>Locks live on the device and are shared with every other controller, so a locked output stays locked for the front panel too. <code>output unlock</code> releases it.</p>
+          <pre class="cmd"><code>bmd videohub output lock 4</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-export" aria-labelledby="t-export" hidden>
+          <h3>Save the whole state to a file</h3>
+          <p>Every label and every route, read back and checked against the device before the file is written. This is the file you restore from.</p>
+          <pre class="cmd"><code>bmd videohub export sunday-service.json</code></pre>
+          <pre class="cmd cmd-out"><code>Exported and verified: 40 inputs, 40 outputs, 40 routes → sunday-service.json</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-restore" aria-labelledby="t-restore" hidden>
+          <h3>Put a saved state back</h3>
+          <p>Changes only what differs, so a hub already in the right state is left alone. <code>--dry-run</code> shows the plan without touching anything.</p>
+          <pre class="cmd"><code>bmd videohub restore sunday-service.json --dry-run</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-rename" aria-labelledby="t-rename" hidden>
+          <h3>Label a source on the hardware</h3>
+          <p>Writes the name to the device itself, so the front panel and every other controller agree with you. This is the groundwork that makes the <a href="#ai">AI section above</a> work.</p>
+          <pre class="cmd"><code>bmd videohub input rename 3 "Lectern Cam"</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-watch" aria-labelledby="t-watch" hidden>
+          <h3>Watch changes as they happen</h3>
+          <p>Including changes made from the front panel or somebody else's control app. Runs until you stop it.</p>
+          <pre class="cmd"><code>bmd videohub watch</code></pre>
+          <pre class="cmd cmd-out"><code>output 4 (FoH MV 1): FoH Sw MV → Switcher PGM
+output 7 lock: unlocked → locked</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-viewset" aria-labelledby="t-viewset" hidden>
+          <h3>Put a source in a multiviewer window</h3>
+          <p>Destination first again: view 1 shows source 3. See the <a href="multiview.html">MultiView guide</a> for overlays, solo and the rest.</p>
+          <pre class="cmd"><code>bmd multiview view set 1 3</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-layout" aria-labelledby="t-layout" hidden>
+          <h3>Change the multiviewer grid</h3>
+          <p>The device decides what layouts it supports, not bmd — so it accepts or refuses the value and you are told which.</p>
+          <pre class="cmd"><code>bmd multiview layout 2x2</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-aux" aria-labelledby="t-aux" hidden>
+          <h3>Feed a stage monitor or a recorder</h3>
+          <p>An auxiliary output carries any source independently of what is on air. Name the source or use its number.</p>
+          <pre class="cmd"><code>bmd atem aux set 1 "Stage Wide"</code></pre>
+          <pre class="cmd cmd-out"><code>Aux 1 now shows 4 (Stage Wide)</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-program" aria-labelledby="t-program" hidden>
+          <h3>Cut to air</h3>
+          <p>This one is live the instant it lands, so it asks first — and refuses outright in a script unless you pass <code>--force</code>. <code>preview set</code> changes nothing on air and does not ask.</p>
+          <pre class="cmd"><code>bmd atem program set "Lectern Cam"</code></pre>
+          <pre class="cmd cmd-out"><code>About to cut ATEM Television Studio HD to 3 (Lectern Cam).
+This goes on air immediately.
+Type y to continue:</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-agents" aria-labelledby="t-agents" hidden>
+          <h3>Teach an AI assistant to use it</h3>
+          <p>Installs everything an assistant needs — the commands, the conventions, and the traps — as a skill it loads only when a task actually involves video hardware. Never into your project's own instructions.</p>
+          <pre class="cmd"><code>bmd agents --skill</code></pre>
+        </div>
+
+        <div role="tabpanel" id="p-json" aria-labelledby="t-json" hidden>
+          <h3>Machine-readable output, on any command</h3>
+          <p>One JSON document per command, with field names that do not change between releases. Exit codes are consistent too: 0 worked, 1 the operation failed, 2 the command was wrong.</p>
+          <pre class="cmd"><code>bmd videohub route list --json</code></pre>
+          <pre class="cmd cmd-out"><code>[{"output":1,"outputLabel":"Projector AR","input":1,"inputLabel":"FoH Sw PGM"}]</code></pre>
+        </div>
+      </div>
+    </div>
   </section>
 
   <section id="guide">
     <div class="guide-callout">
       <p>
-        This page shows a slice. The
+        Want the whole thing? The
         <a href="videohub.html"><strong>Videohub guide</strong></a>,
         <a href="multiview.html"><strong>MultiView guide</strong></a> and
         <a href="atem.html"><strong>ATEM guide</strong></a> each cover every command in their
-        group, the backup workflow, scripting with <code>--json</code>, and troubleshooting.
+        group, the backup workflow, and what to do when something does not work.
       </p>
     </div>
   </section>
@@ -285,12 +451,10 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
 </div>
 
 <script>
-  // Emphasis only: every download link above is a plain, working <a> with no JS involved.
-  // This just adds a "Recommended" badge to the one matching the visitor's platform,
-  // detected from navigator.userAgent / navigator.platform. Best-effort — macOS in
-  // particular cannot be reliably told apart between Intel and Apple Silicon from script
-  // (Safari reports "Intel" on both, for compatibility), so Apple Silicon is assumed there
-  // since it's been the default Mac for years.
+  // Emphasis only: every download link is a plain, working <a> with no JS involved.
+  // This adds a "Recommended" badge to the one matching the visitor's platform. Best-effort —
+  // macOS in particular cannot be reliably told apart between Intel and Apple Silicon from
+  // script (Safari reports "Intel" on both), so Apple Silicon is assumed there.
   (function () {
     try {
       var ua = navigator.userAgent || "";
@@ -315,8 +479,49 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
       badge.textContent = "Recommended for your system";
       link.appendChild(badge);
     } catch (e) {
-      // Detection is cosmetic only; any failure here leaves all five links untouched.
+      // Cosmetic only; any failure leaves all five links untouched.
     }
+  })();
+
+  // Command explorer. Progressive enhancement: the markup ships with every panel present
+  // and only the first `hidden`, so with JavaScript off the page still shows the first
+  // command and the rest are reachable — nothing is lost, it just stops being a picker.
+  // The `is-live` class is what turns the list into tabs, and it is only ever added here.
+  (function () {
+    var root = document.getElementById("explorer");
+    if (!root) return;
+
+    var tabs = Array.prototype.slice.call(root.querySelectorAll('[role="tab"]'));
+    var panels = Array.prototype.slice.call(root.querySelectorAll('[role="tabpanel"]'));
+    if (!tabs.length || tabs.length !== panels.length) return;
+
+    root.classList.add("is-live");
+    panels.forEach(function (panel, i) { panel.hidden = i !== 0; });
+
+    function select(tab, focus) {
+      tabs.forEach(function (t) {
+        var on = t === tab;
+        t.setAttribute("aria-selected", on ? "true" : "false");
+        t.tabIndex = on ? 0 : -1;
+        document.getElementById(t.getAttribute("aria-controls")).hidden = !on;
+      });
+      if (focus) tab.focus();
+    }
+
+    tabs.forEach(function (tab, i) {
+      tab.tabIndex = i === 0 ? 0 : -1;
+      tab.addEventListener("click", function () { select(tab, false); });
+      tab.addEventListener("keydown", function (e) {
+        var next = null;
+        if (e.key === "ArrowDown" || e.key === "ArrowRight") next = tabs[(i + 1) % tabs.length];
+        else if (e.key === "ArrowUp" || e.key === "ArrowLeft") next = tabs[(i - 1 + tabs.length) % tabs.length];
+        else if (e.key === "Home") next = tabs[0];
+        else if (e.key === "End") next = tabs[tabs.length - 1];
+        if (!next) return;
+        e.preventDefault();
+        select(next, true);
+      });
+    });
   })();
 </script>
 </body>

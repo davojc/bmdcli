@@ -6,5 +6,10 @@ namespace Bmd.Commands;
 /// device's raw TXT <c>key=value</c> entries, verbatim and in advertised order (empty array
 /// when the device sent none) — always present regardless of <c>--all</c>, so the JSON shape
 /// stays stable for anything parsing it.</summary>
+/// <summary>One capability a device announced: the mDNS service, a plain word for it, and its
+/// port. A device is often several of these — a switcher with a recorder in it is two.</summary>
+public sealed record DiscoveredServiceResult(string Service, string Capability, int Port);
+
 public sealed record DiscoveredDeviceResult(
-    string Name, string DeviceClass, string? DeviceType, string Address, int Port, IReadOnlyList<string> Txt);
+    string Name, string DeviceClass, string? DeviceType, string Address, int Port,
+    IReadOnlyList<string> Txt, IReadOnlyList<DiscoveredServiceResult> Services);

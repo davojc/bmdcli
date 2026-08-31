@@ -95,7 +95,9 @@ public class DiscoverCommands
         if (json)
         {
             var results = shown
-                .Select(d => new DiscoveredDeviceResult(d.Name, d.DeviceClass, d.DeviceType, d.Address.ToString(), d.Port, d.TxtEntries))
+                .Select(d => new DiscoveredDeviceResult(
+                    d.Name, d.DeviceClass, d.DeviceType, d.Address.ToString(), d.Port, d.TxtEntries,
+                    [.. d.Services.Select(s => new DiscoveredServiceResult(s.Service, s.Capability, s.Port))]))
                 .ToArray();
             Console.WriteLine(JsonSerializer.Serialize(results, BmdJsonContext.Default.DiscoveredDeviceResultArray));
             return 0;
@@ -111,14 +113,24 @@ public class DiscoverCommands
         // stays exactly as clean as it is today. Passing null (rather than an all-empty details
         // array) when !all also means the default path never touches TxtEntries at all.
         IReadOnlyList<IReadOnlyList<string>>? details = all
-            ? shown.Select(d => (IReadOnlyList<string>)d.TxtEntries.Select(TxtLineForDisplay).ToArray()).ToArray()
+            // --all is the "show me everything this thing said" mode, so each service gets a line
+            // with its port alongside the raw TXT. The DOES column names them; this says where.
+            ? shown.Select(d => (IReadOnlyList<string>)
+                [.. d.Services.Select(sv => $"    {sv.Capability} on {sv.Service.TrimEnd('.')} port {sv.Port}"),
+                 .. d.TxtEntries.Select(TxtLineForDisplay)]).ToArray()
             : null;
 
-        Table.Write(["NAME", "TYPE", "ADDRESS"],
-            shown.Select(d => (IReadOnlyList<string>)[d.Name, TypeCell(d), AddressCell(d)]).ToArray(),
+        Table.Write(["NAME", "TYPE", "ADDRESS", "DOES"],
+            shown.Select(d => (IReadOnlyList<string>)[d.Name, TypeCell(d), AddressCell(d), DoesCell(d)]).ToArray(),
             details);
         return 0;
     }
+
+    /// <summary>What a device says it can do, as plain words. One box is often several things —
+    /// a switcher with a recorder in it, a deck with a setup service — and which of them bmd
+    /// happens to drive is already in the TYPE column, so this answers the other question.</summary>
+    static string DoesCell(DiscoveredDevice device) =>
+        string.Join(", ", device.Services.Select(s => s.Capability).Distinct());
 
     const string NoDevicesFoundMessage =
         "No devices found. mDNS discovery does not cross subnets, and some older Blackmagic " +

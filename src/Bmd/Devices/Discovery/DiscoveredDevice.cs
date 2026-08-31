@@ -12,10 +12,23 @@ namespace Bmd.Devices.Discovery;
 /// TXT record at all. This is what lets <c>--all</c> show what a device with no recognized
 /// <c>class=</c> reports, and is the raw material any future device-type support would key off
 /// of.</summary>
+/// <summary>One thing a device announced it can do: the mDNS service it answered on, a plain
+/// word for what that service is, and the port it listens on.
+///
+/// Modern Blackmagic hardware is rarely one function. An ATEM Television Studio HD8 ISO is a
+/// switcher and a recorder in the same box and says so, on two services at two ports; a HyperDeck
+/// is a recorder that also exposes a setup service. Reporting only the one bmd happens to drive
+/// would answer a narrower question than the one `discover` is for.</summary>
+public sealed record DeviceService(string Service, string Capability, int Port);
+
 public sealed record DiscoveredDevice(
     string Name, string DeviceClass, string? DeviceType, IPAddress Address, int Port,
     IReadOnlyList<string> TxtEntries)
 {
+    /// <summary>Everything this device announced, including the service bmd drives it through.
+    /// Ordered as heard, so the primary service is first.</summary>
+    public IReadOnlyList<DeviceService> Services { get; init; } = [];
+
     /// <summary>Convenience constructor for the common case of no TXT entries (or when a
     /// caller already extracted <see cref="DeviceClass"/>/<see cref="Name"/> and has nothing
     /// further to carry) — equivalent to passing an empty collection for
@@ -62,6 +75,20 @@ public static class DeviceClasses
     /// queried and its answers are reported, but it stays unmapped for the same reason
     /// AtemSwitcher once did: offering to configure a device bmd cannot talk to is worse than
     /// leaving it unclassified.</para></summary>
+    /// <summary>A plain word for what a service does, for people reading a device listing rather
+    /// than an mDNS trace. Unknown services fall back to their own name, which is more useful than
+    /// hiding them: an unexpected service is exactly the thing worth noticing.</summary>
+    public static string CapabilityForService(string service)
+    {
+        if (Is(service, MdnsServices.SwitcherControl)) return "switcher";
+        if (Is(service, MdnsServices.HyperDeckControl)) return "recorder";
+        if (Is(service, MdnsServices.Videohub)) return "routing";
+        if (Is(service, MdnsServices.BmdStreaming)) return "streaming";
+        if (Is(service, MdnsServices.BmdBlockConfig)) return "setup";
+        if (Is(service, MdnsServices.Blackmagic)) return "control";
+        return service.TrimEnd('.').Replace(".local", "", StringComparison.OrdinalIgnoreCase);
+    }
+
     public static string? DeviceTypeForService(string service) => service switch
     {
         _ when Is(service, MdnsServices.SwitcherControl) => "atem",
@@ -151,7 +178,11 @@ public static class DeviceAssembler
             }
         }
 
-        var devices = new List<DiscoveredDevice>(srvRecords.Count);
+        // Paired with the SRV target — the device's own hostname — because that, not the
+        // instance name, is what identifies the box. One device advertising two services gives
+        // them two different instance names (a HyperDeck answers as "HyperDeck" on its setup
+        // service and "HyperDeck Studio 4K Pro" on its control service) but only ever one host.
+        var devices = new List<(string Host, DiscoveredDevice Device)>(srvRecords.Count);
         foreach (var srv in srvRecords)
         {
             if (!addressByName.TryGetValue(srv.Target, out var address))
@@ -182,41 +213,64 @@ public static class DeviceAssembler
             if (deviceType is null && serviceBySrvName.TryGetValue(srv.Name, out var service))
                 deviceType = DeviceClasses.DeviceTypeForService(service);
 
-            devices.Add(new DiscoveredDevice(name, deviceClass, deviceType, address, srv.Port, txtEntries));
+            var announced = serviceBySrvName.TryGetValue(srv.Name, out var announcedOn)
+                ? new[] { new DeviceService(announcedOn, DeviceClasses.CapabilityForService(announcedOn), srv.Port) }
+                : [];
+
+            devices.Add((srv.Target, new DiscoveredDevice(name, deviceClass, deviceType, address, srv.Port, txtEntries)
+            {
+                Services = announced,
+            }));
         }
 
         return Collapse(devices);
     }
 
-    /// <summary>One physical box, one entry.
+    /// <summary>One physical box, one entry, listing everything it said it can do.
     ///
-    /// A switcher with a recorder in it answers on both <c>_switcher_ctrl._udp</c> and
-    /// <c>_hyperdeck_ctrl._tcp</c>, at different ports, so it arrives here twice. Listing it twice
-    /// would be answering "what did the network say" when the question is "what is out there".
+    /// Modern hardware is several things at once and announces each separately. An HD8 ISO is a
+    /// switcher and a recorder, on two services at two ports; a HyperDeck answers on its control
+    /// service and again on a setup service, under a different instance name each time. Listing
+    /// those separately answers "what did the network say" when the question is "what is out
+    /// there".
     ///
-    /// <para>Keyed on name and address rather than address alone: two devices behind one address
-    /// is unusual but a single device with two names is not a thing, and this way a NAT or a
-    /// shared host cannot silently swallow a device. The entry bmd can drive wins; between two it
-    /// cannot, the first heard wins, which keeps the result stable.</para></summary>
-    static IReadOnlyList<DiscoveredDevice> Collapse(List<DiscoveredDevice> devices)
+    /// <para>Keyed on the SRV target — the device's own hostname — because the instance name
+    /// varies between a device's own services and the address can be shared by a NAT or a host
+    /// running several responders. A hostname cannot be two devices on one link.</para>
+    ///
+    /// <para>Which entry represents the device: the one bmd can drive, else the one that named
+    /// its own class, else the first heard. That order matters — a HyperDeck's setup service
+    /// carries a richer TXT record than its control service but no <c>class=</c>, so picking on
+    /// TXT size alone would report it as an unknown thing on the wrong port.</para></summary>
+    static IReadOnlyList<DiscoveredDevice> Collapse(List<(string Host, DiscoveredDevice Device)> devices)
     {
-        var best = new Dictionary<(string, string), DiscoveredDevice>();
-        var order = new List<(string, string)>();
+        var best = new Dictionary<string, DiscoveredDevice>(StringComparer.OrdinalIgnoreCase);
+        var order = new List<string>();
 
-        foreach (var device in devices)
+        foreach (var (host, device) in devices)
         {
-            var key = (device.Name.ToLowerInvariant(), device.Address.ToString());
-            if (!best.TryGetValue(key, out var existing))
+            if (!best.TryGetValue(host, out var existing))
             {
-                best[key] = device;
-                order.Add(key);
+                best[host] = device;
+                order.Add(host);
                 continue;
             }
-            if (existing.DeviceType is null && device.DeviceType is not null) best[key] = device;
+
+            // Merge rather than discard: the entry that loses is still a real thing the device
+            // does, and it is the answer to "what else is in this box".
+            var merged = existing.Services.Concat(device.Services)
+                .GroupBy(s => s.Service, StringComparer.OrdinalIgnoreCase)
+                .Select(g => g.First())
+                .ToArray();
+
+            best[host] = (Rank(device) > Rank(existing) ? device : existing) with { Services = merged };
         }
 
         return [.. order.Select(k => best[k])];
     }
+
+    static int Rank(DiscoveredDevice device) =>
+        device.DeviceType is not null ? 2 : device.DeviceClass.Length > 0 ? 1 : 0;
 
     static string InstanceLabel(string srvName)
     {

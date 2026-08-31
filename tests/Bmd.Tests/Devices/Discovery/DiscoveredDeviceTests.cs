@@ -83,6 +83,71 @@ public class DiscoveredDeviceTests
     }
 
     [Fact]
+    public void FromRecords_ReportsEveryCapabilityADeviceAnnounced()
+    {
+        // The question `discover` answers is "what is out there", and modern hardware is several
+        // things at once. Reporting only the service bmd drives would answer a narrower one.
+        var records = SwitcherRecords();
+        records.AddRange(SwitcherRecords(
+            instance: "ATEM Television Studio HD8 ISO._hyperdeck_ctrl._tcp.local",
+            service: "_hyperdeck_ctrl._tcp.local",
+            port: 9993));
+
+        var device = Assert.Single(DeviceAssembler.FromRecords(records));
+
+        Assert.Equal(["switcher", "recorder"], device.Services.Select(sv => sv.Capability));
+        Assert.Equal([9910, 9993], device.Services.Select(sv => sv.Port));
+    }
+
+    [Fact]
+    public void FromRecords_CollapsesOnHostnameNotInstanceName()
+    {
+        // A HyperDeck answers as "HyperDeck" on its setup service and "HyperDeck Studio 4K Pro"
+        // on its control service — one box, two names, one hostname.
+        const string host = "HyperDeck-C78987D9.local";
+        List<DnsRecord> records =
+        [
+            new PtrRecord("_bmd_blockcfg._tcp.local", "HyperDeck._bmd_blockcfg._tcp.local"),
+            new SrvRecord("HyperDeck._bmd_blockcfg._tcp.local", host, 9977),
+            new TxtRecord("HyperDeck._bmd_blockcfg._tcp.local", ["product id=BE8C", "sw version=1"]),
+            new PtrRecord("_hyperdeck_ctrl._tcp.local", "HyperDeck._hyperdeck_ctrl._tcp.local"),
+            new SrvRecord("HyperDeck._hyperdeck_ctrl._tcp.local", host, 9993),
+            new TxtRecord("HyperDeck._hyperdeck_ctrl._tcp.local",
+                ["class=HyperDeck", "name=HyperDeck Studio 4K Pro"]),
+            new ARecord(host, Address),
+        ];
+
+        var device = Assert.Single(DeviceAssembler.FromRecords(records));
+
+        // The setup service carries a richer TXT record but no class, so choosing on TXT size
+        // would report this as an unknown thing on the wrong port.
+        Assert.Equal("HyperDeck Studio 4K Pro", device.Name);
+        Assert.Equal("HyperDeck", device.DeviceClass);
+        Assert.Equal(9993, device.Port);
+        Assert.Equal(["setup", "recorder"], device.Services.Select(sv => sv.Capability));
+    }
+
+    [Theory]
+    [InlineData("_switcher_ctrl._udp.local", "switcher")]
+    [InlineData("_hyperdeck_ctrl._tcp.local", "recorder")]
+    [InlineData("_videohub._tcp.local", "routing")]
+    [InlineData("_bmd_streaming._tcp.local", "streaming")]
+    [InlineData("_bmd_blockcfg._tcp.local", "setup")]
+    [InlineData("_blackmagic._tcp.local", "control")]
+    public void CapabilityForService_UsesPlainWords(string service, string expected)
+    {
+        Assert.Equal(expected, DeviceClasses.CapabilityForService(service));
+    }
+
+    [Fact]
+    public void CapabilityForService_FallsBackToTheServiceNameForSomethingNew()
+    {
+        // An unexpected service is exactly the thing worth noticing, so it is shown rather than
+        // hidden behind an "unknown".
+        Assert.Equal("_something_new._tcp", DeviceClasses.CapabilityForService("_something_new._tcp.local"));
+    }
+
+    [Fact]
     public void FromRecords_CollapsesOneDeviceAnnouncingSeveralProtocols()
     {
         // A switcher with a recorder in it answers on both services, at different ports. Listing

@@ -193,6 +193,11 @@ Discovery is mDNS, so it does not cross subnets. A device that does not appear c
 driven by passing `--host` directly, or by setting its address in config — being undiscovered and
 being unsupported are different things.
 
+Each device reports what it can do as well as what it is. `deviceType` is the bmd command group
+that drives it, or null; `services` lists every capability it announced, with the port for each.
+One box is often several things — a switcher with a recorder in it announces both — so do not
+assume one device means one function.
+
 **Name every unnamed input on an ATEM.**
 
 ```

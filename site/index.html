@@ -316,10 +316,16 @@ untouched.</span></code></pre>
           <h3>Find the gear on your network</h3>
           <p>Asks the local network what Blackmagic devices are out there. Add <code>--add</code> to pick one and remember it, so you never type its address again.</p>
           <pre class="cmd"><code>bmd discover --add</code></pre>
-          <pre class="cmd cmd-out"><code>NAME                               TYPE      ADDRESS
-Blackmagic Smart Videohub 40 x 40  videohub  192.168.4.100:9990
-Blackmagic MultiView 4             multiview 192.168.4.96:9990
-Blackmagic ATEM Television Studio  atem      192.168.4.98:9910</code></pre>
+          <pre class="cmd cmd-out"><code>NAME                            TYPE       ADDRESS             DOES
+ATEM Television Studio HD8 ISO  atem       192.168.4.123:9910  switcher, recorder
+Blackmagic MultiView 4          multiview  192.168.4.96:9990   control
+Blackmagic Smart Videohub 40x40 videohub   192.168.4.100:9990  control, routing
+HyperDeck Studio 4K Pro         HyperDeck  192.168.4.184:9993  setup, recorder</code></pre>
+          <p>
+            One box is often several things. The DOES column is what each device says it can do —
+            a switcher with a recorder built in announces both — while TYPE is the part bmd can
+            drive today.
+          </p>
         </div>
 
         <div role="tabpanel" id="p-config" aria-labelledby="t-config" hidden>

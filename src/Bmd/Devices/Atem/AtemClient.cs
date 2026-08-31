@@ -104,7 +104,7 @@ public sealed class AtemClient : IAsyncDisposable
             // Silence. Either nothing is there, or something is there that does not speak this.
             throw new TimeoutException($"no response from {Host}:{Port} — is it an ATEM?");
         }
-        catch (SocketException ex) when (ex.SocketErrorCode is SocketError.ConnectionReset)
+        catch (SocketException ex) when (IsNothingListening(ex.SocketErrorCode))
         {
             // ICMP port-unreachable: the host answered, but nothing is bound to that UDP port.
             // Worth saying plainly — the usual cause is an address that is a Videohub or a
@@ -123,6 +123,17 @@ public sealed class AtemClient : IAsyncDisposable
         _session = header.Session;
         await SendAckAsync(0, deadline);
     }
+
+    /// <summary>Whether a socket error means "the host is there but nothing is bound to that port".
+    ///
+    /// The same ICMP port-unreachable surfaces as a different error per platform: Windows reports
+    /// ConnectionReset, Linux and macOS report ConnectionRefused. Matching only the Windows code
+    /// left every Unix user with a raw socket message instead of one naming the port — found by
+    /// CI, which runs all three, rather than by the machine this was written on. The unreachable
+    /// codes are included for the same reason: they mean the same thing to a user.</summary>
+    static bool IsNothingListening(SocketError error) =>
+        error is SocketError.ConnectionReset or SocketError.ConnectionRefused
+            or SocketError.HostUnreachable or SocketError.NetworkUnreachable;
 
     async Task ReceiveLoopAsync(CancellationToken stopping)
     {

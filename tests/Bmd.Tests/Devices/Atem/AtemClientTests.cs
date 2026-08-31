@@ -59,6 +59,24 @@ public class AtemClientTests
         Assert.Equal(24, client.State.Sources.Select(s => s.Id).Distinct().Count());
     }
 
+    [Theory]
+    [InlineData(1)]
+    [InlineData(3)]
+    public async Task Connect_ReadsTheWholeDumpThroughAKeepaliveInTheMiddleOfIt(int afterPacket)
+    {
+        // The regression this exists for: a keepalive arriving mid-dump is byte for byte the
+        // packet that follows a dump, so treating the first payload-free packet as the end
+        // truncates state at whatever point the keepalive landed. On a real 1 M/E Production
+        // Studio 4K that showed up as the switcher intermittently reporting no auxiliary
+        // outputs, moments after correctly listing three — and a restore command refusing to run.
+        await using var fake = FakeAtem.Start(keepaliveAfterPacket: afterPacket);
+        await using var client = await AtemClient.ConnectAsync("127.0.0.1", fake.Port, Patient);
+
+        Assert.Equal("ATEM Television Studio HD", client.State.ProductName);
+        Assert.Equal(client.State.Topology.Sources, client.State.Sources.Count);
+        Assert.Equal(client.State.Topology.Auxiliaries, client.State.Auxes.Count);
+    }
+
     [Fact]
     public async Task Connect_KeepsAcknowledgingKeepalivesAfterTheDump()
     {

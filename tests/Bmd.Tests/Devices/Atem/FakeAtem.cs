@@ -26,6 +26,7 @@ public sealed class FakeAtem : IAsyncDisposable
     readonly bool _silent;
     readonly int? _resendPacketIndex;
     readonly bool _ignoreCommands;
+    readonly int? _keepaliveAfterPacket;
     Task? _loop;
     int _sequence;
 
@@ -38,11 +39,12 @@ public sealed class FakeAtem : IAsyncDisposable
     /// <summary>Command blocks the client sent, in order.</summary>
     public List<AtemCommandBlock> Commands { get; } = [];
 
-    FakeAtem(bool silent, int? resendPacketIndex, bool ignoreCommands)
+    FakeAtem(bool silent, int? resendPacketIndex, bool ignoreCommands, int? keepaliveAfterPacket)
     {
         _silent = silent;
         _resendPacketIndex = resendPacketIndex;
         _ignoreCommands = ignoreCommands;
+        _keepaliveAfterPacket = keepaliveAfterPacket;
         _udp = new UdpClient(new IPEndPoint(IPAddress.Loopback, 0));
         Port = ((IPEndPoint)_udp.Client.LocalEndPoint!).Port;
         _loop = Task.Run(() => RunAsync(_stopping.Token));
@@ -50,12 +52,18 @@ public sealed class FakeAtem : IAsyncDisposable
 
     /// <summary>A switcher that completes the handshake, replays the dump, then keeps sending
     /// keepalives. <paramref name="resendPacketIndex"/> makes it send that dump packet twice, the
-    /// second flagged Resend with the same sequence id, as the real device did during capture.</summary>
-    public static FakeAtem Start(int? resendPacketIndex = null, bool ignoreCommands = false) =>
-        new(silent: false, resendPacketIndex, ignoreCommands);
+    /// second flagged Resend with the same sequence id, as the real device did during capture.
+    ///
+    /// <paramref name="keepaliveAfterPacket"/> injects a 12-byte keepalive after that dump packet,
+    /// which is what a real switcher does during a dump long enough to span one. It is byte for
+    /// byte what the device sends *after* the dump, so a client that reads it as an end marker
+    /// truncates its own state — the bug an ATEM 1 M/E Production Studio 4K hit.</summary>
+    public static FakeAtem Start(
+        int? resendPacketIndex = null, bool ignoreCommands = false, int? keepaliveAfterPacket = null) =>
+        new(silent: false, resendPacketIndex, ignoreCommands, keepaliveAfterPacket);
 
     /// <summary>Completes the handshake and then sends nothing at all.</summary>
-    public static FakeAtem StartSilent() => new(silent: true, null, false);
+    public static FakeAtem StartSilent() => new(silent: true, null, false, null);
 
     async Task RunAsync(CancellationToken stopping)
     {
@@ -87,6 +95,7 @@ public sealed class FakeAtem : IAsyncDisposable
                 if (_resendPacketIndex == _sequence - 1)
                     await SendDumpPacketAsync(packet, peer, _sequence,
                         AtemFlags.AckRequest | AtemFlags.Resend, stopping);
+                if (_keepaliveAfterPacket == _sequence) await SendKeepaliveAsync(peer, stopping);
             }
 
             // The payload-free packet that tells the client the dump is done, then keepalives.

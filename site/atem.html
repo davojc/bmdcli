@@ -245,10 +245,12 @@ bmd atem program set 4</code></pre>
         nobody checked. That is what caught the one command whose layout was initially wrong.
       </li>
       <li>
-        <strong>Findings come from one switcher model</strong> — an ATEM Television Studio HD III.
-        Model variation between ATEMs is much larger than between Videohubs. bmd reads the
-        switcher's own reported topology rather than assuming any of it, but a model with different
-        capabilities may still behave in ways this has not seen.
+        <strong>Two switcher models, both working.</strong> Everything here was verified against an
+        ATEM Television Studio HD III and an ATEM 1 M/E Production Studio 4K — 24 sources and one
+        auxiliary against 31 sources and three. Both report protocol 2.30 and both accept every
+        command unchanged, so these commands are not tied to a particular model or firmware. bmd
+        reads each switcher's own reported capabilities rather than assuming any of them, but a
+        model very different from those two may still behave in ways this has not seen.
       </li>
       <li>
         <strong>Video mode is shown as a raw number.</strong> The mode-number-to-format table is not

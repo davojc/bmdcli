@@ -206,10 +206,21 @@ be labelled as such, so nobody later mistakes it for observed behaviour.
 
 ## Risks
 
-1. **Model variation.** Findings come from one switcher. An ATEM Mini Pro and a 1 M/E Production
-   Studio 4K differ in inputs, M/Es and available commands far more than a Videohub 40×40 differs
-   from a MultiView 4. `_top` reports topology and should be read rather than assumed, and nothing
-   should hardcode a count observed on the HD III.
+1. **Model variation — confirmed real, and it found a bug.** Everything was later re-run against a
+   second switcher, an **ATEM 1 M/E Production Studio 4K**: 31 sources against 24, 10 inputs
+   against 8, and **3 auxiliary outputs against 1**. Both report protocol 2.30, and all four
+   commands work unchanged on both, so the layouts are not version-specific.
+
+   Reading `_top` rather than assuming a shape is what made that work — but the *dump completion*
+   rule did not survive. It had been "the first packet carrying no blocks", which is sound on a
+   switcher whose dump fits in five packets and wrong on a larger one: a keepalive arriving
+   mid-dump is byte for byte identical to the packet that follows a dump. The bigger switcher
+   intermittently reported having no auxiliary outputs moments after correctly listing three, and
+   an aux command then refused to run against a switcher that plainly had auxes.
+
+   Completion is now decided by content — `_top` says how many sources and auxes to expect, so the
+   dump is done once that many have arrived with the model name — with an idle-gap fallback for a
+   device that under-reports its own totals.
 2. **Firmware variation.** `PrvI` already disagrees with the documentation on this firmware. Others
    may on others. The advance-by-length rule contains the blast radius.
 3. **UDP reliability is the client's problem.** Retransmission and ordering are not free, and are

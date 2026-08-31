@@ -129,7 +129,12 @@ program+preview set) ✅. Future, and now promised on the site's device strip: H
 (text/TCP, port 9993), Web Presenter, and camera control. The first two both
 advertise on 9977 with **no `class=`**, identifying themselves by `product id`
 (BE73/BE74/BE8B/BE8C observed), so discovery needs a second identification path
-before either can be added. Camera control is not its own network protocol —
-Blackmagic cameras are controlled *through* an ATEM over SDI, so it is an
-extension of `Devices/Atem/` rather than a fourth device family. Also future:
+before either can be added. Camera is **naming, not control**: a connected camera
+cannot be driven over the network, but its identity — what it is called, and
+therefore what it *is* on the signal map — can be configured, and that is the
+part that matters here. It belongs to the same job as discovery: making the
+network legible, so that both an operator and an assistant can tell "input 3"
+from "Lectern Cam". Scope it as an extension of `Devices/Atem/` rather than a
+fourth device family, and resist the pull towards iris/focus/CCU control, which
+is a different product. Also future:
 ATEM export/restore/watch, transitions and keyers.

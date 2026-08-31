@@ -26,11 +26,33 @@
 
   <nav class="page-nav" aria-label="Sections">
     <ol>
+      <li><a href="#deploy">Where to put it</a></li>
       <li><a href="#verify">1. Verify your download</a></li>
       <li><a href="#macos">2. macOS first run</a></li>
       <li><a href="#updating">3. Staying up to date</a></li>
     </ol>
   </nav>
+
+  <section id="deploy">
+    <h2>Where to put it</h2>
+    <p>
+      bmd is a single executable of about 9&nbsp;MB on disk, with no installer, no runtime and no
+      admin rights required. That is deliberate, and it is the practical difference from a
+      desktop control application: those are the right tool at a desk with a screen, and they
+      have to be installed and kept current on each machine that needs them.
+    </p>
+    <p>
+      One file goes anywhere. Copy it to the gallery PC, to the rack-room machine that has no
+      monitor attached, to a laptop in the truck, or onto a server and reach it over SSH. The
+      same command works in all of them, which means the machine you happen to be sitting at
+      stops deciding what you can change.
+    </p>
+    <pre class="cmd"><code>ssh rack-room "bmd videohub route set 4 13"</code></pre>
+    <p>
+      There is nothing to uninstall, either: delete the file. bmd writes only its own config,
+      backups and update cache, all under your user's standard directories.
+    </p>
+  </section>
 
   <section id="verify">
     <h2>1. Verify your download</h2>

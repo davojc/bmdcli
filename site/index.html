@@ -114,6 +114,15 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
         <p class="outcome-cmd"><code>bmd videohub watch</code></p>
       </li>
       <li>
+        <h3>Put it on everything</h3>
+        <p>
+          It is a 4&nbsp;MB download and one file — no installer, no admin rights, nothing to
+          keep updated on ten machines. Copy it to the gallery PC, the rack-room box with no
+          monitor, your laptop, and change the rack from wherever you happen to be standing.
+        </p>
+        <p class="outcome-cmd"><code>ssh rack-room "bmd videohub route set 4 13"</code></p>
+      </li>
+      <li>
         <h3>Let the show run itself</h3>
         <p>
           Because it is one line at a prompt, it is also one line in a cue script, a scheduled
@@ -215,7 +224,8 @@ untouched.</span></code></pre>
   <section id="download">
     <h2>Download</h2>
     <p class="section-lede">
-      One file. Nothing to install alongside it, no runtime, no admin rights.
+      One file, about 4&nbsp;MB. No installer, no runtime, no admin rights — copy it where you
+      want it and run it.
     </p>
     <ul class="downloads">
       <li>

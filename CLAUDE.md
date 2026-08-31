@@ -125,6 +125,11 @@ Milestones (detail in spec): 1 skeleton+config ✅ → 2 read path + agent JSON 
 9 self-update ✅ → 10 MultiView (second device: `bmd multiview`, discovery,
 site guide) ✅ → 11 ATEM (third device, its own binary/UDP protocol:
 `bmd atem` info/input list/status/aux list, input rename, aux set,
-program+preview set) ✅. Future: ATEM export/restore/watch, transitions and
-keyers; HyperDeck (text/TCP, port 9993 — note it advertises on 9977 with no
-`class=`, so discovery needs a second identification path).
+program+preview set) ✅. Future, and now promised on the site's device strip: HyperDeck
+(text/TCP, port 9993), Web Presenter, and camera control. The first two both
+advertise on 9977 with **no `class=`**, identifying themselves by `product id`
+(BE73/BE74/BE8B/BE8C observed), so discovery needs a second identification path
+before either can be added. Camera control is not its own network protocol —
+Blackmagic cameras are controlled *through* an ATEM over SDI, so it is an
+extension of `Devices/Atem/` rather than a fourth device family. Also future:
+ATEM export/restore/watch, transitions and keyers.

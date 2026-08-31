@@ -978,7 +978,10 @@ footer .disclaimer {
   padding: 0;
   display: grid;
   gap: 0.75rem;
-  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+  /* 15rem rather than 13 so a wide viewport breaks three-up: the three supported
+     devices land on the first row and the three still coming on the second,
+     which says the state of things faster than the hairlines alone do. */
+  grid-template-columns: repeat(auto-fit, minmax(15rem, 1fr));
 }
 
 .devices li {

@@ -52,6 +52,60 @@ public class AgentsCommandsTests : IDisposable
     }
 
     [Fact]
+    public void Agents_Skill_InstallsAsASkillWithFrontmatter()
+    {
+        // Without the header this is a document an agent will not discover; with it, the agent
+        // loads it only when a task actually involves Blackmagic hardware.
+        var path = Path.Combine(_directory, "SKILL.md");
+        Assert.Equal(0, new AgentsCommands().Agents(skill: true, write: path));
+
+        var lines = File.ReadAllLines(path);
+        var text = File.ReadAllText(path);
+        Assert.Equal("---", lines[0]);
+        Assert.Equal("name: bmd", lines[1]);
+        Assert.StartsWith("description: Use when controlling Blackmagic", lines[2]);
+        Assert.Equal("---", lines[3]);
+        Assert.Equal("", lines[4]);              // blank line before the body
+        Assert.Equal("# bmd for agents", lines[5]);
+        Assert.Contains("bmd atem program set", text);
+    }
+
+    [Fact]
+    public void Agents_Write_DoesNotAddSkillFrontmatter()
+    {
+        // A tool that reads a plain file wants the document, not a header it will render as text.
+        var path = Path.Combine(_directory, "plain.md");
+        Assert.Equal(0, new AgentsCommands().Agents(write: path));
+        Assert.DoesNotContain("name: bmd", File.ReadAllText(path));
+    }
+
+    [Fact]
+    public void Agents_Skill_DefaultsToTheConventionalSkillLocation()
+    {
+        // Never a main instruction file: CLAUDE.md and its equivalents are the project's own
+        // instructions, loaded for every task and often hand-written. A tool manual belongs in a
+        // skill that loads on demand, and must never overwrite those.
+        // Separators are normalised before comparing: Path.Combine keeps whatever the caller
+        // wrote, so "elsewhere/" stays forward-slashed even on Windows.
+        static string Normal(string path) => path.Replace('\\', '/');
+
+        Assert.Equal(".claude/skills/bmd/SKILL.md", Normal(AgentsCommands.SkillPath(null, skill: true)));
+        Assert.Equal("elsewhere/SKILL.md", Normal(AgentsCommands.SkillPath("elsewhere/", skill: true)));
+        Assert.Equal("custom/place.md", Normal(AgentsCommands.SkillPath("custom/place.md", skill: true)));
+        Assert.Equal("AGENTS.md", Normal(AgentsCommands.SkillPath("AGENTS.md", skill: false)));
+    }
+
+    [Fact]
+    public void Agents_SkillAndWriteCompose()
+    {
+        // --skill chooses the format, --write the destination, so the two combine rather than
+        // conflict: a skill can be installed somewhere other than the default location.
+        var path = Path.Combine(_directory, "custom", "SKILL.md");
+        Assert.Equal(0, new AgentsCommands().Agents(skill: true, write: path));
+        Assert.StartsWith("---", File.ReadAllText(path));
+    }
+
+    [Fact]
     public void Agents_Write_RefusesToClobberWithoutForce()
     {
         var path = Path.Combine(_directory, "CLAUDE.md");

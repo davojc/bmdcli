@@ -63,7 +63,11 @@ before architectural changes; update it when a design decision changes.
   1 operation failure, 2 usage/format error.
 - **`AGENTS.md` is the user-facing agent guide** (distinct from this file, which is for agents
   working *on* bmd). It is embedded in the binary via an `EmbeddedResource`, printed by
-  `bmd agents`, saved by `bmd agents --write <path>`, and shipped as a release asset. It documents
+  `bmd agents`, installed as an agent skill by `bmd agents --skill`, and shipped as a release
+  asset. **It installs as a skill, never into `CLAUDE.md`/`AGENTS.md`/`GEMINI.md`** — those are a
+  project's own instructions, hand-written and loaded for every task; a manual for a tool the
+  project merely uses would both bloat that context and risk overwriting it. `--write <path>` puts
+  the plain document somewhere for a tool that reads files directly. It documents
   contracts and conventions and deliberately **never lists flags** — `--help` owns those, and a
   doc that restates them is a second source of truth that goes stale. A test checks every command
   it names still exists in `Program.cs`.

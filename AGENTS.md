@@ -18,6 +18,9 @@ bmd atem aux set --help       # one command's arguments, flags, units and defaul
 Written for agents, but nothing here is agent-specific — it is just the manual a careful operator
 would want on one page.
 
+If you are reading this from a terminal rather than from an installed skill, `bmd agents --skill`
+installs it as one, so it loads only when a task actually involves Blackmagic hardware.
+
 ## The contract
 
 These hold for every command, and are the things worth relying on.

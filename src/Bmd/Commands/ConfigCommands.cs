@@ -17,10 +17,11 @@ public class ConfigCommands
     /// <param name="key">Configuration key, e.g. videohub.host.</param>
     /// <param name="value">Value to assign.</param>
     /// <param name="project">Write to a .bmdconfig in the current directory tree instead of your user config, pinning this setting to this directory. Without it, the value is saved for your user and applies wherever you run bmd.</param>
+    /// <param name="context">Act on a named device context (a second device of the same type) rather than the default one. See `bmd videohub context list` and its equivalents.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
-    public int Set([Argument] string key, [Argument] string value, bool project = false, bool json = false)
+    public int Set([Argument] string key, [Argument] string value, bool project = false, string? context = null, bool json = false)
     {
-        if (!TryKey(key, out var k)) return 2;
+        if (!TryKey(key, context, out var k)) return 2;
         if (!TryValue(value)) return 2;
         return RunGuarded(() =>
         {
@@ -33,10 +34,11 @@ public class ConfigCommands
 
     /// <summary>Print the effective value of a configuration key.</summary>
     /// <param name="key">Configuration key, e.g. videohub.host.</param>
+    /// <param name="context">Act on a named device context (a second device of the same type) rather than the default one. See `bmd videohub context list` and its equivalents.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
-    public int Get([Argument] string key, bool json = false)
+    public int Get([Argument] string key, string? context = null, bool json = false)
     {
-        if (!TryKey(key, out var k)) return 2;
+        if (!TryKey(key, context, out var k)) return 2;
         return RunGuarded(() =>
         {
             var value = _load().GetEffective(k);
@@ -61,10 +63,11 @@ public class ConfigCommands
     /// <summary>Remove a configuration key.</summary>
     /// <param name="key">Configuration key, e.g. videohub.host.</param>
     /// <param name="project">Remove from the .bmdconfig in the current directory tree instead of your user config.</param>
+    /// <param name="context">Act on a named device context (a second device of the same type) rather than the default one. See `bmd videohub context list` and its equivalents.</param>
     /// <param name="json">Emit the result as JSON on stdout.</param>
-    public int Unset([Argument] string key, bool project = false, bool json = false)
+    public int Unset([Argument] string key, bool project = false, string? context = null, bool json = false)
     {
-        if (!TryKey(key, out var k)) return 2;
+        if (!TryKey(key, context, out var k)) return 2;
         return RunGuarded(() =>
         {
             if (!_load().Unset(k, project ? ConfigScope.Project : ConfigScope.User))
@@ -93,14 +96,27 @@ public class ConfigCommands
                 return 0;
             }
             foreach (var entry in _load().ListEffective())
-                Console.WriteLine(showOrigin ? $"{entry.Origin}\t{entry.Key}={entry.Value}" : $"{entry.Key}={entry.Value}");
+            {
+                // A contexted key is shown with its context: two contexts legitimately define the
+                // same key, and a flat listing would otherwise print the same line twice.
+                var name = entry.Context is null ? entry.Key : $"{entry.Key} [{entry.Context}]";
+                Console.WriteLine(showOrigin ? $"{entry.Origin}\t{name}={entry.Value}" : $"{name}={entry.Value}");
+            }
             return 0;
         });
     }
 
-    static bool TryKey(string raw, out ConfigKey key)
+    static bool TryKey(string raw, string? context, out ConfigKey key)
     {
-        if (ConfigKey.TryParse(raw, out key)) return true;
+        if (context is not null && !ConfigKey.IsValidContext(context))
+        {
+            Console.Error.WriteLine(
+                $"error: '{context}' is not a usable context name " +
+                $"('{ConfigKey.DefaultContextName}' is reserved for the unnamed one)");
+            key = default;
+            return false;
+        }
+        if (ConfigKey.TryParse(raw, context, out key)) return true;
         Console.Error.WriteLine($"error: key '{raw}' must be in section.key format with no spaces or =[]#;\" characters (e.g. videohub.host)");
         return false;
     }

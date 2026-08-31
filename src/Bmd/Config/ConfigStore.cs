@@ -1,6 +1,14 @@
 namespace Bmd.Config;
 
-public sealed record ConfigEntry(string Key, string Value, string Origin);
+public sealed record ConfigEntry(string Key, string Value, string Origin, string? Context = null);
+
+/// <summary>A configured device of one type: its context name (null for the unlabelled default),
+/// its address, and whether it is the one commands currently use.</summary>
+public sealed record DeviceContext(string? Name, string? Host, bool Active)
+{
+    /// <summary>What to show a user. The default context has no name of its own.</summary>
+    public string DisplayName => Name ?? ConfigKey.DefaultContextName;
+}
 
 /// <summary>Which file a write targets.
 ///
@@ -58,27 +66,78 @@ public sealed class ConfigStore
         File.Exists(path) ? IniFile.Parse(File.ReadAllText(path)) : IniFile.Empty();
 
     public string? GetEffective(ConfigKey key) =>
-        _local.Get(key.Section, key.Name) ?? _global.Get(key.Section, key.Name);
+        _local.Get(key.IniSection, key.Name) ?? _global.Get(key.IniSection, key.Name);
+
+    /// <summary>The context commands for <paramref name="section"/> currently run against, or null
+    /// for the unlabelled default. Set by `bmd &lt;type&gt; context set`.</summary>
+    public string? ActiveContext(string section) =>
+        ConfigKey.Normalise(GetEffective(new ConfigKey(section, ContextKeyName)));
+
+    /// <summary>The key holding which context is active. Lives in the unlabelled section, so a
+    /// context can never carry its own idea of which context is active.</summary>
+    public const string ContextKeyName = "context";
+
+    /// <summary>Every configured context for a device type, newest-first by nothing in particular —
+    /// the default (if it has a host) first, then named contexts in alphabetical order.
+    ///
+    /// A context exists when something has been written under it, which in practice means a host.
+    /// There is no separate registry to drift out of step with the config file.</summary>
+    public IReadOnlyList<DeviceContext> Contexts(string section)
+    {
+        var active = ActiveContext(section);
+        var names = new SortedSet<string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var file in new[] { _global, _local })
+            foreach (var (iniSection, _, _) in file.Entries())
+            {
+                var (parsed, context) = ConfigKey.SplitIniSection(iniSection);
+                if (context is not null && parsed.Equals(section, StringComparison.OrdinalIgnoreCase))
+                    names.Add(context);
+            }
+
+        var result = new List<DeviceContext>();
+        var defaultHost = GetEffective(new ConfigKey(section, "host"));
+        if (defaultHost is not null || active is null)
+            result.Add(new DeviceContext(null, defaultHost, active is null));
+        foreach (var name in names)
+            result.Add(new DeviceContext(
+                name,
+                GetEffective(new ConfigKey(section, "host", name)),
+                string.Equals(name, active, StringComparison.OrdinalIgnoreCase)));
+        return result;
+    }
 
     public IReadOnlyList<ConfigEntry> ListEffective()
     {
         var result = new List<ConfigEntry>();
-        var seen = new HashSet<string>();
-        // local wins, so collect local shadow keys first
+        var seen = new HashSet<(string, string?)>();
+        // Identity is the key AND its context: `atem.host` in two contexts is two different
+        // settings, and deduplicating on the key alone silently hides every contexted one.
         var localEntries = _localPath is null
             ? []
-            : _local.Entries().Select(e => new ConfigEntry(KeyOf(e.Section, e.Key), e.Value, _localPath)).ToList();
-        var localKeys = new HashSet<string>(localEntries.Select(e => e.Key));
+            : _local.Entries().Select(e => Entry(e.Section, e.Key, e.Value, _localPath)).ToList();
+        var localKeys = new HashSet<(string, string?)>(localEntries.Select(e => (e.Key, e.Context)));
 
+        // local wins, so global entries a local file shadows are skipped
         foreach (var (section, key, value) in _global.Entries())
         {
-            var name = KeyOf(section, key);
-            if (!localKeys.Contains(name) && seen.Add(name))
-                result.Add(new ConfigEntry(name, value, _globalPath));
+            var entry = Entry(section, key, value, _globalPath);
+            var identity = (entry.Key, entry.Context);
+            if (!localKeys.Contains(identity) && seen.Add(identity))
+                result.Add(entry);
         }
         foreach (var entry in localEntries)
-            if (seen.Add(entry.Key)) result.Add(entry);
+            if (seen.Add((entry.Key, entry.Context))) result.Add(entry);
         return result;
+    }
+
+    /// <summary>Builds a listing entry, splitting a context out of the INI section name so a
+    /// contexted key is shown under its own name rather than as a section called `atem "gallery"`.
+    /// The key stays `atem.host` in both cases: two contexts genuinely define the same key, and
+    /// flattening them into distinct key names would misrepresent that.</summary>
+    static ConfigEntry Entry(string iniSection, string key, string value, string origin)
+    {
+        var (section, context) = ConfigKey.SplitIniSection(iniSection);
+        return new ConfigEntry(KeyOf(section, key), value, origin, context);
     }
 
     static string KeyOf(string section, string key) =>
@@ -92,7 +151,7 @@ public sealed class ConfigStore
         var (file, path) = scope == ConfigScope.Project
             ? (_local, _localPath ?? Path.Combine(_startDirectory, ConfigPaths.LocalFileName))
             : (_global, _globalPath);
-        file.Set(key.Section, key.Name, value);
+        file.Set(key.IniSection, key.Name, value);
         Save(file, path);
         return path;
     }
@@ -102,7 +161,7 @@ public sealed class ConfigStore
     public bool Unset(ConfigKey key, ConfigScope scope)
     {
         var (file, path) = scope == ConfigScope.Project ? (_local, _localPath) : (_global, _globalPath);
-        if (path is null || !file.Unset(key.Section, key.Name)) return false;
+        if (path is null || !file.Unset(key.IniSection, key.Name)) return false;
         Save(file, path);
         return true;
     }

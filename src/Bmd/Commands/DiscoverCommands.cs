@@ -42,9 +42,10 @@ public class DiscoverCommands
     /// <param name="all">List every responding device, not just recognized types — shows each device's raw advertised class, useful for learning what a real device reports. Cannot be combined with --add.</param>
     /// <param name="add">Interactively pick one of the discovered, recognized devices and write its host (and port, if not the default) into config — the same effect as running `bmd config set`, without typing the address by hand.</param>
     /// <param name="project">Used with --add: write to a .bmdconfig in the current directory tree instead of your user config. Without it, the device is saved for your user and applies wherever you run bmd.</param>
+    /// <param name="context">Used with --add: save the device under a named context, so it sits alongside an existing device of the same type instead of replacing it. Select it later with that device type's `context set` command.</param>
     /// <param name="json">Emit the result as a JSON array on stdout (empty array when nothing is found); with --add, emit the written key(s) in the same shape as `bmd config set --json`.</param>
     /// <param name="ct">Cancelled by Ctrl+C.</param>
-    public async Task<int> Discover(int? timeout = null, bool all = false, bool add = false, bool project = false, bool json = false, CancellationToken ct = default)
+    public async Task<int> Discover(int? timeout = null, bool all = false, bool add = false, bool project = false, string? context = null, bool json = false, CancellationToken ct = default)
     {
         if (add && all)
         {
@@ -89,7 +90,7 @@ public class DiscoverCommands
             .ToArray();
 
         if (add)
-            return AddSelected(devices.Count, shown, project, json);
+            return AddSelected(devices.Count, shown, project, context, json);
 
         if (json)
         {
@@ -142,7 +143,7 @@ public class DiscoverCommands
     /// reject `--add --all` before reaching here, so every entry's <c>DeviceType</c> is non-null.
     /// <paramref name="devicesAnswered"/> is the unfiltered count (before that filtering), used
     /// only to pick the right <see cref="EmptyResultMessage"/> when nothing is left to add.</summary>
-    int AddSelected(int devicesAnswered, IReadOnlyList<DiscoveredDevice> shown, bool project, bool json)
+    int AddSelected(int devicesAnswered, IReadOnlyList<DiscoveredDevice> shown, bool project, string? context, bool json)
     {
         if (shown.Count == 0)
         {
@@ -178,13 +179,25 @@ public class DiscoverCommands
         var device = shown[choice - 1];
         var deviceType = device.DeviceType!;
 
-        var toSet = new List<(ConfigKey Key, string Value)> { (new ConfigKey(deviceType, "host"), device.Address.ToString()) };
+        var toSet = new List<(ConfigKey Key, string Value)>
+            { (new ConfigKey(deviceType, "host", context), device.Address.ToString()) };
         if (device.Port != DefaultPort)
-            toSet.Add((new ConfigKey(deviceType, "port"), device.Port.ToString()));
+            toSet.Add((new ConfigKey(deviceType, "port", context), device.Port.ToString()));
 
         try
         {
             var store = _loadConfig();
+
+            // Adding a second device of a type without naming it silently replaces the first,
+            // which is how someone ends up pointing a command at the wrong switcher. Say so.
+            if (context is null
+                && store.GetEffective(new ConfigKey(deviceType, "host")) is { } existing
+                && existing != device.Address.ToString())
+            {
+                Console.Error.WriteLine(
+                    $"note: {deviceType}.host was {existing}; replacing it. " +
+                    $"To keep both, re-run with --context <name>.");
+            }
             var results = new List<ConfigSetResult>(toSet.Count);
             foreach (var (key, value) in toSet)
             {

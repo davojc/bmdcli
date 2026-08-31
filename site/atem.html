@@ -46,6 +46,30 @@
     </p>
     <pre class="cmd"><code>bmd config set atem.host 192.168.1.30</code></pre>
     <p>
+      <strong>More than one ATEM?</strong> Give the second one a context and switch between them.
+      A context is just a name for a device, stored alongside the first rather than replacing it:
+    </p>
+    <pre class="cmd"><code>bmd config set atem.host 192.168.1.31 --context gallery
+bmd atem context list
+bmd atem context set gallery</code></pre>
+    <pre class="cmd cmd-out"><code>   CONTEXT  HOST
+*  default  192.168.1.30
+   gallery  192.168.1.31</code></pre>
+    <p>
+      The choice sticks until you change it, and every command afterwards acts on that switcher.
+      Because that is easy to forget, anything that <em>changes</em> a switcher tells you which one
+      it acted on whenever a named context is active &mdash; on stderr, so <code>--json</code>
+      output is unaffected:
+    </p>
+    <pre class="cmd cmd-out"><code>(on gallery &mdash; 192.168.1.31)
+Aux 1 now shows 4 (Stage)</code></pre>
+    <p>
+      <code>bmd atem context set</code> with no name lets you pick from a list, and
+      <code>bmd atem context set default</code> goes back to the first one. Add
+      <code>--project</code> to pin one directory to one switcher instead of changing it
+      everywhere. Contexts work the same way for Videohubs and MultiViews.
+    </p>
+    <p>
       Every <code>bmd atem</code> command also takes <code>--host</code>, <code>--port</code> and
       <code>--timeout</code> for one-off use. If you point it at the wrong device, it says so
       plainly rather than hanging — a Videohub or MultiView has nothing listening on 9910 at all:

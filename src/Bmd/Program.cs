@@ -59,6 +59,20 @@ app.Add("discover", discover.Discover);
 var version = new VersionCommands();
 app.Add("version", version.Version);
 
+// Registered one by one rather than in a loop: ConsoleAppFramework's source generator has to
+// see each path as a literal, and rejects Add() inside a loop outright (CAF008).
+var videohubContext = new ContextCommands("videohub");
+app.Add("videohub context list", videohubContext.List);
+app.Add("videohub context set", videohubContext.Set);
+
+var multiviewContext = new ContextCommands("multiview");
+app.Add("multiview context list", multiviewContext.List);
+app.Add("multiview context set", multiviewContext.Set);
+
+var atemContext = new ContextCommands("atem");
+app.Add("atem context list", atemContext.List);
+app.Add("atem context set", atemContext.Set);
+
 var atem = new AtemCommands();
 app.Add("atem info", atem.Info);
 app.Add("atem input list", atem.InputList);

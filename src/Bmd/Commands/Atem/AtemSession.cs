@@ -15,30 +15,22 @@ internal sealed class AtemSession(Func<ConfigStore> loadConfig)
 {
     public const string ConfigSection = "atem";
 
+    string? _activeContext;
+
     /// <summary>Connects, runs the action, maps every expected failure to one stderr line.</summary>
     public Task<int> WithClientAsync(
         string? host, int? port, int? timeout, Func<AtemClient, Task<int>> action)
         => RunCatchingAsync(async () =>
         {
             var store = loadConfig();
-            var resolvedHost = host ?? GetConfig(store, $"{ConfigSection}.host");
-            if (resolvedHost is null)
-            {
-                Console.Error.WriteLine(
-                    $"error: no host configured for {ConfigSection} " +
-                    $"(run: bmd config set {ConfigSection}.host <addr>)");
-                return 1;
-            }
-            var resolvedPort = port ?? GetConfigInt(store, $"{ConfigSection}.port") ?? AtemPacket.DefaultPort;
-            var resolvedTimeout = timeout ?? GetConfigInt(store, $"{ConfigSection}.timeout") ?? 5;
-            if (resolvedTimeout <= 0)
-            {
-                Console.Error.WriteLine("error: timeout must be a positive number of seconds");
-                return 2;
-            }
+            if (DeviceAddress.Resolve(
+                    store, ConfigSection, host, port, timeout, AtemPacket.DefaultPort,
+                    out var exit) is not { } target)
+                return exit;
+            _activeContext = target.Context;
 
             await using var client = await AtemClient.ConnectAsync(
-                resolvedHost, resolvedPort, TimeSpan.FromSeconds(resolvedTimeout));
+                target.Host, target.Port, TimeSpan.FromSeconds(target.Timeout));
             return await action(client);
         });
 
@@ -64,6 +56,7 @@ internal sealed class AtemSession(Func<ConfigStore> loadConfig)
                     AtemSnapshot.FromState(client.State, DateTimeOffset.UtcNow));
                 return written;
             }
+            DeviceAddress.NoteContext(_activeContext, client.Host);
             return action(client, Backup);
         });
 
@@ -83,20 +76,4 @@ internal sealed class AtemSession(Func<ConfigStore> loadConfig)
         }
     }
 
-    static string? GetConfig(ConfigStore store, string key)
-    {
-        ConfigKey.TryParse(key, out var parsed);
-        return store.GetEffective(parsed);
-    }
-
-    static int? GetConfigInt(ConfigStore store, string key)
-    {
-        var value = GetConfig(store, key);
-        if (value is null) return null;
-        return int.TryParse(value, out var parsed)
-            ? parsed
-            : throw new ConfigValueFormatException($"config {key} is not a number: '{value}'");
-    }
-
-    internal sealed class ConfigValueFormatException(string message) : Exception(message);
 }

@@ -44,6 +44,8 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(AtemRenameResult))]
 [JsonSerializable(typeof(AtemAuxSetResult))]
 [JsonSerializable(typeof(AtemBusSetResult))]
+[JsonSerializable(typeof(ContextEntry[]))]
+[JsonSerializable(typeof(ContextSetResult))]
 [JsonSerializable(typeof(VersionResult))]
 [JsonSerializable(typeof(UpdateCheckResult))]
 [JsonSerializable(typeof(UpdateResult))]

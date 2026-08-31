@@ -11,9 +11,82 @@ namespace Bmd.Commands;
 /// Parameterised by config section — `videohub`, `multiview` — because that is genuinely the
 /// only thing that differed between the two groups. Both talk the same protocol to the same
 /// port with the same client; only the key they read their address from changes.</summary>
+
+/// <summary>Turns a device type plus the active context into the settings a command connects with.
+///
+/// <para><b>A named context never falls back to the unlabelled section.</b> If a context is active
+/// and defines no host, that is an error naming the context — not a quiet retreat to the default
+/// device. Falling back would mean cutting to air on the switcher you did not select, which is the
+/// exact failure contexts exist to prevent.</para></summary>
+internal static class DeviceAddress
+{
+    internal sealed record Resolved(string Host, int Port, int Timeout, string? Context);
+
+    /// <summary>Resolves, or writes one error line and returns null with <paramref name="exitCode"/>
+    /// set. <paramref name="host"/> and the other overrides come from command-line flags and win
+    /// over everything.
+    ///
+    /// The exit code is an out-parameter rather than a fixed 1 because the two failures here are
+    /// different kinds: an unconfigured or context-less host is an operation failure (1), while a
+    /// nonsensical timeout is a usage error (2), and the project's exit-code contract distinguishes
+    /// them.</summary>
+    internal static Resolved? Resolve(
+        ConfigStore store, string section, string? host, int? port, int? timeout, int defaultPort,
+        out int exitCode)
+    {
+        exitCode = 1;
+        var context = store.ActiveContext(section);
+        var resolvedHost = host ?? Get(store, section, "host", context);
+        if (resolvedHost is null)
+        {
+            Console.Error.WriteLine(context is null
+                ? $"error: no host configured for {section} (run: bmd config set {section}.host <addr>)"
+                : $"error: {section} context '{context}' has no host " +
+                  $"(run: bmd config set {section}.host <addr> --context {context})");
+            return null;
+        }
+
+        var resolvedTimeout = timeout ?? GetInt(store, section, "timeout", context) ?? 5;
+        if (resolvedTimeout <= 0)
+        {
+            Console.Error.WriteLine("error: timeout must be a positive number of seconds");
+            exitCode = 2;
+            return null;
+        }
+        return new Resolved(
+            resolvedHost, port ?? GetInt(store, section, "port", context) ?? defaultPort,
+            resolvedTimeout, context);
+    }
+
+    /// <summary>Announces which device a mutation acted on, but only when a named context is
+    /// active — on the default device this would be noise on every single command. Goes to stderr
+    /// so `--json` output stays exactly one document on stdout.</summary>
+    internal static void NoteContext(string? context, string host)
+    {
+        if (context is not null) Console.Error.WriteLine($"(on {context} — {host})");
+    }
+
+    static string? Get(ConfigStore store, string section, string name, string? context) =>
+        store.GetEffective(new ConfigKey(section, name, context));
+
+    static int? GetInt(ConfigStore store, string section, string name, string? context)
+    {
+        var value = Get(store, section, name, context);
+        if (value is null) return null;
+        return int.TryParse(value, out var parsed)
+            ? parsed
+            : throw new ConfigValueFormatException($"config {section}.{name} is not a number: '{value}'");
+    }
+}
+
+internal sealed class ConfigValueFormatException(string message) : Exception(message);
+
 internal sealed class DeviceSession(string configSection, Func<ConfigStore> loadConfig)
 {
     readonly string _configSection = configSection;
+
+    /// <summary>The context the last connection resolved through, for the mutation notice.</summary>
+    string? ActiveContext { get; set; }
 
     /// <summary>Synchronous-action convenience over <see cref="RunWithClientAsync"/>.</summary>
     public Task<int> WithClientAsync(string? host, int? port, int? timeout, Func<VideohubClient, int> action)
@@ -42,6 +115,7 @@ internal sealed class DeviceSession(string configSection, Func<ConfigStore> load
                         BackupStore.DeviceKey(client.Host, client.State.Device.ModelName), snapshot);
                 }
             }
+            DeviceAddress.NoteContext(ActiveContext, client.Host);
             return await action(client, backupPath);
         });
 
@@ -82,6 +156,7 @@ internal sealed class DeviceSession(string configSection, Func<ConfigStore> load
                 }
                 return Task.FromResult(written);
             }
+            DeviceAddress.NoteContext(ActiveContext, client.Host);
             return action(client, Backup);
         });
 
@@ -92,23 +167,12 @@ internal sealed class DeviceSession(string configSection, Func<ConfigStore> load
         => RunCatchingAsync(async () =>
         {
             var store = loadConfig();
-            var resolvedHost = host ?? GetConfig(store, $"{_configSection}.host");
-            if (resolvedHost is null)
-            {
-                Console.Error.WriteLine(
-                    $"error: no host configured for {_configSection} " +
-                    $"(run: bmd config set {_configSection}.host <addr>)");
-                return 1;
-            }
-            var resolvedPort = port ?? GetConfigInt(store, $"{_configSection}.port") ?? 9990;
-            var resolvedTimeout = timeout ?? GetConfigInt(store, $"{_configSection}.timeout") ?? 5;
-            if (resolvedTimeout <= 0)
-            {
-                Console.Error.WriteLine("error: timeout must be a positive number of seconds");
-                return 2;
-            }
+            if (DeviceAddress.Resolve(
+                    store, _configSection, host, port, timeout, 9990, out var exit) is not { } target)
+                return exit;
+            ActiveContext = target.Context;
             await using var client = await VideohubClient.ConnectAsync(
-                resolvedHost, resolvedPort, TimeSpan.FromSeconds(resolvedTimeout));
+                target.Host, target.Port, TimeSpan.FromSeconds(target.Timeout));
             return await action(client);
         });
 
@@ -132,20 +196,4 @@ internal sealed class DeviceSession(string configSection, Func<ConfigStore> load
         }
     }
 
-    static string? GetConfig(ConfigStore store, string key)
-    {
-        ConfigKey.TryParse(key, out var parsed);
-        return store.GetEffective(parsed);
-    }
-
-    static int? GetConfigInt(ConfigStore store, string key)
-    {
-        var value = GetConfig(store, key);
-        if (value is null) return null;
-        return int.TryParse(value, out var parsed)
-            ? parsed
-            : throw new ConfigValueFormatException($"config {key} is not a number: '{value}'");
-    }
-
-    sealed class ConfigValueFormatException(string message) : Exception(message);
 }

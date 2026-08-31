@@ -44,6 +44,15 @@ before architectural changes; update it when a design decision changes.
   default. **Writes go to the user config unless `--project` is passed** —
   unlike git, because a device address belongs to the network, not to the
   directory you ran the command from.
+- **Contexts address a second device of the same type.** A context is a
+  git-style INI subsection (`[atem "gallery"]`); the active one is
+  `<type>.context` in the unlabelled section, chosen by
+  `bmd <type> context set` and listed by `context list`. Resolution is
+  active context -> unlabelled section -> error: **a named context never
+  falls back**, because falling back means acting on a device the user did
+  not select. `default` is reserved as the name of the unlabelled context.
+  Mutations announce the context on stderr when a named one is active, so
+  `--json` stdout stays exactly one document.
 - **Layering:** `Devices/` never references ConsoleAppFramework or `Commands/`.
   Command classes stay thin (resolve config → call client → format). No shared
   device abstraction until a second device type exists.

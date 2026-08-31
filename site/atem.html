@@ -126,6 +126,17 @@ Video mode:       11 (raw device value)</code></pre>
 10010  Live On Screens   PGM
 10011  Not Live          PVW</code></pre>
     <p>
+      <strong>You can give a name instead of an id anywhere a source is expected</strong>, which is
+      usually easier than looking one up:
+    </p>
+    <pre class="cmd"><code>bmd atem aux set 1 Stage
+bmd atem preview set "Color Bars"
+bmd atem input rename Lyrics "Lyrics Desk"</code></pre>
+    <p>
+      Long name or short name, case-insensitively. Ids still win, so a source literally named
+      <code>4</code> can never shadow source 4.
+    </p>
+    <p>
       <strong>Those ids are the switcher's own, and bmd does not renumber them.</strong> Everywhere
       else in bmd, numbering is 1-based to match a device's front panel. An ATEM's source ids are
       not a dense range — inputs are 1&ndash;8, but colour bars are 1000 and media player 1 is 3010
@@ -196,11 +207,24 @@ Preview:  1      Presenter</code></pre>
       <code>preview set</code> changes nothing on air. <code>program set</code> is a hard cut, on
       air, immediately:
     </p>
-    <pre class="cmd"><code>bmd atem preview set 4
-bmd atem program set 4</code></pre>
+    <pre class="cmd"><code>bmd atem preview set Stage
+bmd atem program set Stage</code></pre>
     <p>
-      Both take <code>--mix-effect</code> for a switcher with more than one; it defaults to 1.
-      There is no transition or auto-mix command in this release.
+      <code>program set</code> asks before it acts, because nothing else in bmd is both instant and
+      visible to an audience:
+    </p>
+    <pre class="cmd cmd-out"><code>About to cut ATEM Television Studio HD at 192.168.1.30 to 4 (Stage). This goes on air immediately.
+Type y to continue:</code></pre>
+    <p>
+      In a script, or anywhere without a terminal, there is nobody to ask &mdash; so it refuses
+      outright rather than prompting into the void or quietly proceeding. A scheduled job cuts to
+      air only where someone wrote <code>--force</code> and meant it:
+    </p>
+    <pre class="cmd cmd-out"><code>error: refusing to cut to air without a terminal to confirm at (re-run with --force if that is what you mean)</code></pre>
+    <p>
+      <code>preview set</code> has no such guard, because it changes nothing on air. Both take
+      <code>--mix-effect</code> for a switcher with more than one; it defaults to 1. There is no
+      transition or auto-mix command in this release.
     </p>
   </section>
 

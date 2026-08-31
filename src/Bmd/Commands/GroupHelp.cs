@@ -25,6 +25,7 @@ internal static class GroupHelp
     internal static readonly Entry[] Commands =
     [
         new("discover", "Find Blackmagic devices on the local network via mDNS."),
+        new("diagram", "Write an HTML page showing every device and what is routed to what."),
         new("version", "Show the version and platform of this bmd binary."),
         new("agents", "Print the guide for driving bmd from an AI agent or a script."),
         new("update", "Download and install the newest release of bmd, replacing this binary in place."),
@@ -38,7 +39,6 @@ internal static class GroupHelp
         new("videohub route list", "List the current routing (1-based): which input feeds each output."),
         new("videohub watch", "Stream device changes as they happen, including changes made by other controllers. Numbering is 1-based."),
         new("videohub export", "Export a verified snapshot of labels and routing (1-based). Locks are not captured."),
-        new("videohub diagram", "Write an HTML page showing what is routed to what."),
         new("videohub restore", "Apply a snapshot to the device, changing only what differs. Numbering is 1-based."),
         new("videohub route set", "Route an input to an output (both 1-based, matching the device's front panel)."),
         new("videohub input rename", "Rename an input (1-based)."),

@@ -20,7 +20,7 @@ namespace Bmd.Output;
 [JsonSerializable(typeof(VideohubOutputEntry[]))]
 [JsonSerializable(typeof(VideohubRouteEntry[]))]
 [JsonSerializable(typeof(VideohubExportResult))]
-[JsonSerializable(typeof(VideohubDiagramResult))]
+[JsonSerializable(typeof(DiagramResult))]
 [JsonSerializable(typeof(VideohubRouteSetResult))]
 [JsonSerializable(typeof(VideohubRenameResult))]
 [JsonSerializable(typeof(VideohubLockResult))]

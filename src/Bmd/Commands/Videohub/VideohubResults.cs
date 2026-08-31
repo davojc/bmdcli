@@ -13,11 +13,6 @@ public sealed record VideohubInputEntry(int N, string Label);
 /// `label`/`outputLabel` — leaving two schemas for one table.</summary>
 public sealed record VideohubOutputEntry(int N, string Label, string Lock);
 
-/// <summary>`videohub diagram --json`: what the page describes, so a script can act on the
-/// summary without parsing the HTML it just wrote.</summary>
-public sealed record VideohubDiagramResult(
-    string Device, int Inputs, int Outputs, int SourcesInUse, int IdleInputs, string File);
-
 /// <summary>One routed connection: an output (1-based) and the input (1-based) feeding it,
 /// with both labels.</summary>
 public sealed record VideohubRouteEntry(int Output, string OutputLabel, int Input, string InputLabel);

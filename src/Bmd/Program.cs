@@ -27,7 +27,6 @@ app.Add("videohub output list", videohub.OutputList);
 app.Add("videohub route list", videohub.RouteList);
 app.Add("videohub watch", videohub.Watch);
 app.Add("videohub export", videohub.Export);
-app.Add("videohub diagram", videohub.Diagram);
 app.Add("videohub restore", videohub.Restore);
 app.Add("videohub route set", videohub.RouteSet);
 app.Add("videohub input rename", videohub.InputRename);
@@ -84,6 +83,9 @@ app.Add("atem aux set", atem.AuxSet);
 app.Add("atem status", atem.Status);
 app.Add("atem program set", atem.ProgramSet);
 app.Add("atem preview set", atem.PreviewSet);
+
+var diagram = new DiagramCommands();
+app.Add("diagram", diagram.Draw);
 
 var agents = new AgentsCommands();
 app.Add("agents", agents.Agents);

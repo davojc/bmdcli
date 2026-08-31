@@ -204,15 +204,21 @@ assume one device means one function.
 bmd atem input list --json | jq -r '.[] | select(.name == "") | .id'
 ```
 
-**Draw the current routing as a page you can send someone.**
+**Draw the whole rig as a page you can send someone.**
 
 ```
-bmd videohub diagram rack.html
+bmd diagram rig.html
 ```
 
-One self-contained HTML file — no scripts, no web fonts, nothing to fetch — showing each source
-with the outputs it feeds, the full routing table, and which inputs are idle. `--json` reports a
-summary of what it wrote instead of the page.
+One self-contained HTML file covering every configured device — router, multiviewer and switchers,
+across every context — with each device's sources on one side, its destinations on the other, and
+the paths currently joining them. Hovering a name traces what it feeds. Nothing is fetched at
+runtime, so it works offline and prints.
+
+A device that cannot be reached is drawn as a gap with the reason on it rather than being left
+out, and the command still exits 0 — one box being off is not a failure of the diagram. `--json`
+reports how many devices were reached. Connections *between* devices are not shown: a device
+reports its own crosspoints and nothing about what is plugged into its inputs.
 
 **Snapshot before a show, restore after.**
 

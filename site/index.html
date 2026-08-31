@@ -290,12 +290,12 @@ untouched.</span></code></pre>
         <button type="button" role="tab" id="t-context" aria-controls="p-context" aria-selected="false">context set</button>
 
         <p class="explorer-group">Routing</p>
+        <button type="button" role="tab" id="t-diagram" aria-controls="p-diagram" aria-selected="false">diagram</button>
         <button type="button" role="tab" id="t-routelist" aria-controls="p-routelist" aria-selected="false">route list</button>
         <button type="button" role="tab" id="t-routeset" aria-controls="p-routeset" aria-selected="false">route set</button>
         <button type="button" role="tab" id="t-lock" aria-controls="p-lock" aria-selected="false">output lock</button>
 
         <p class="explorer-group">Saving &amp; labels</p>
-        <button type="button" role="tab" id="t-diagram" aria-controls="p-diagram" aria-selected="false">diagram</button>
         <button type="button" role="tab" id="t-export" aria-controls="p-export" aria-selected="false">export</button>
         <button type="button" role="tab" id="t-restore" aria-controls="p-restore" aria-selected="false">restore</button>
         <button type="button" role="tab" id="t-rename" aria-controls="p-rename" aria-selected="false">input rename</button>
@@ -371,10 +371,11 @@ Backup: …/20260829-143512.json</code></pre>
         </div>
 
         <div role="tabpanel" id="p-diagram" aria-labelledby="t-diagram" hidden>
-          <h3>Draw what is routed to what</h3>
-          <p>Writes a single HTML page showing every source with the outputs it feeds, the whole routing table, and which inputs are sitting idle. No scripts and no web fonts, so it opens on a rack-room machine with no network — and prints.</p>
-          <pre class="cmd"><code>bmd videohub diagram rack.html</code></pre>
-          <pre class="cmd cmd-out"><code>Wrote 40 outputs from 18 sources (22 inputs idle) → rack.html</code></pre>
+          <h3>Draw the whole rig</h3>
+          <p>Writes a single HTML page covering every device you have configured — router, multiviewer, switchers — with each one's sources on the left, destinations on the right, and lines showing what is feeding what. Hover a name and it traces the signal.</p>
+          <pre class="cmd"><code>bmd diagram rig.html</code></pre>
+          <pre class="cmd cmd-out"><code>Drew 5 of 5 device(s) → rig.html</code></pre>
+          <p>Nothing is fetched when the page opens, so it works on a rack-room machine with no network, and it prints. A device that is switched off is drawn as a gap with the reason on it rather than quietly left out.</p>
         </div>
 
         <div role="tabpanel" id="p-export" aria-labelledby="t-export" hidden>

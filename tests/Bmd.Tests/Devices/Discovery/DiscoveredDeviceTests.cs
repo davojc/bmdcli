@@ -26,6 +26,102 @@ public class DiscoveredDeviceTests
         return records;
     }
 
+    // ---- service-type identification -------------------------------------------------
+    //
+    // Newer firmware advertises a service named after what the device does, and may advertise
+    // nothing generic at all. An ATEM Television Studio HD8 ISO announces _switcher_ctrl._udp
+    // and _hyperdeck_ctrl._tcp, carries no `class=` in TXT, and was therefore invisible to
+    // discovery while being perfectly driveable once given its address by hand.
+
+    static List<DnsRecord> SwitcherRecords(
+        string instance = "ATEM Television Studio HD8 ISO._switcher_ctrl._udp.local",
+        string target = "ATEM-Television-Studio-HD8-ISO.local",
+        string service = "_switcher_ctrl._udp.local",
+        int port = 9910) =>
+        [
+            new PtrRecord(service, instance),
+            new SrvRecord(instance, target, port),
+            // Exactly what the real device sends: a unique id, and no class or name.
+            new TxtRecord(instance, ["unique id=b0f2ada03f5048c0a54a15abb63e5987"]),
+            new ARecord(target, Address),
+        ];
+
+    [Fact]
+    public void FromRecords_IdentifiesASwitcherThatAdvertisesNoClass()
+    {
+        var device = Assert.Single(DeviceAssembler.FromRecords(SwitcherRecords()));
+
+        Assert.Equal("atem", device.DeviceType);
+        Assert.Equal(9910, device.Port);
+        // The instance label is the only name on offer, and it is a good one.
+        Assert.Equal("ATEM Television Studio HD8 ISO", device.Name);
+        Assert.Equal("", device.DeviceClass);
+    }
+
+    [Theory]
+    [InlineData("_switcher_ctrl._udp.local", "atem")]
+    [InlineData("_SWITCHER_CTRL._UDP.LOCAL", "atem")]
+    [InlineData("_videohub._tcp.local", "videohub")]
+    [InlineData("_blackmagic._tcp.local", null)]        // generic: says nothing about the device
+    [InlineData("_hyperdeck_ctrl._tcp.local", null)]    // findable, but bmd cannot drive one
+    [InlineData("_bmd_streaming._tcp.local", null)]
+    public void DeviceTypeForService_MapsOnlyWhatBmdCanDrive(string service, string? expected)
+    {
+        Assert.Equal(expected, DeviceClasses.DeviceTypeForService(service));
+    }
+
+    [Fact]
+    public void FromRecords_PrefersTheClassInTxtOverTheServiceItAnsweredOn()
+    {
+        // A device that names its own class is the better authority; the service is the fallback.
+        var records = SwitcherRecords();
+        records.RemoveAll(r => r is TxtRecord);
+        records.Add(new TxtRecord(
+            "ATEM Television Studio HD8 ISO._switcher_ctrl._udp.local", ["class=Videohub"]));
+
+        Assert.Equal("videohub", Assert.Single(DeviceAssembler.FromRecords(records)).DeviceType);
+    }
+
+    [Fact]
+    public void FromRecords_CollapsesOneDeviceAnnouncingSeveralProtocols()
+    {
+        // A switcher with a recorder in it answers on both services, at different ports. Listing
+        // it twice answers "what did the network say" when the question is "what is out there".
+        var records = SwitcherRecords();
+        records.AddRange(SwitcherRecords(
+            instance: "ATEM Television Studio HD8 ISO._hyperdeck_ctrl._tcp.local",
+            service: "_hyperdeck_ctrl._tcp.local",
+            port: 9993));
+
+        var device = Assert.Single(DeviceAssembler.FromRecords(records));
+
+        // The half bmd can actually drive wins, whichever order the answers arrived in.
+        Assert.Equal("atem", device.DeviceType);
+        Assert.Equal(9910, device.Port);
+    }
+
+    [Fact]
+    public void FromRecords_KeepsTwoDifferentDevicesApart()
+    {
+        var records = SwitcherRecords();
+        records.AddRange(SwitcherRecords(
+            instance: "Another Switcher._switcher_ctrl._udp.local",
+            target: "another-switcher.local"));
+
+        // Same address, different names: still two devices, because collapsing on address alone
+        // would let a shared host or a NAT swallow one of them.
+        Assert.Equal(2, DeviceAssembler.FromRecords(records).Count);
+    }
+
+    [Fact]
+    public void MdnsServices_QueriesTheDeviceSpecificNamesAsWellAsTheGenericOne()
+    {
+        Assert.Contains(MdnsServices.Blackmagic, MdnsServices.All);
+        Assert.Contains(MdnsServices.SwitcherControl, MdnsServices.All);
+        Assert.Contains(MdnsServices.HyperDeckControl, MdnsServices.All);
+        Assert.Contains(MdnsServices.Videohub, MdnsServices.All);
+    }
+
     [Fact]
     public void FromRecords_AssemblesASupportedDevice()
     {

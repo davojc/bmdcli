@@ -4,13 +4,42 @@ using System.Net.Sockets;
 
 namespace Bmd.Devices.Discovery;
 
-/// <summary>The mDNS service names bmd queries for when discovering Blackmagic devices.</summary>
+/// <summary>The mDNS service names bmd queries for when discovering Blackmagic devices.
+///
+/// <para>Newer firmware advertises a service named after what the device <i>does</i> rather than
+/// the generic <c>_blackmagic._tcp</c>, and does not necessarily advertise the generic one at all.
+/// An ATEM Television Studio HD8 ISO announces only <c>_switcher_ctrl._udp</c> and
+/// <c>_hyperdeck_ctrl._tcp</c>, so querying the two original names found everything on a test
+/// network except the newest switcher on it — which bmd could drive perfectly well once told its
+/// address by hand.</para>
+///
+/// <para>Each name here was observed on real hardware by enumerating
+/// <c>_services._dns-sd._udp.local</c>, the DNS-SD meta-query that asks a network which service
+/// types exist on it. That is the way to extend this list: ask, rather than guess.</para></summary>
 public static class MdnsServices
 {
+    /// <summary>The generic name. Older Videohubs, MultiViews and ATEMs answer on this.</summary>
     public const string Blackmagic = "_blackmagic._tcp.local";
+
     public const string BmdBlockConfig = "_bmd_blockcfg._tcp.local";
 
-    public static IReadOnlyList<string> All { get; } = [Blackmagic, BmdBlockConfig];
+    /// <summary>ATEM switchers, on UDP 9910. The HD8 ISO advertises this and nothing generic.</summary>
+    public const string SwitcherControl = "_switcher_ctrl._udp.local";
+
+    /// <summary>Videohub routers, on TCP 9990.</summary>
+    public const string Videohub = "_videohub._tcp.local";
+
+    /// <summary>HyperDeck control, on TCP 9993. Advertised by HyperDecks and also by switchers
+    /// with a recorder built in — an HD8 ISO answers on both this and SwitcherControl, which is
+    /// why <see cref="DeviceAssembler"/> has to collapse one device announcing several
+    /// protocols into a single entry.</summary>
+    public const string HyperDeckControl = "_hyperdeck_ctrl._tcp.local";
+
+    /// <summary>Streaming hardware — the ATEM Streaming Bridge and the Web Presenter family.</summary>
+    public const string BmdStreaming = "_bmd_streaming._tcp.local";
+
+    public static IReadOnlyList<string> All { get; } =
+        [Blackmagic, BmdBlockConfig, SwitcherControl, Videohub, HyperDeckControl, BmdStreaming];
 }
 
 /// <summary>Minimal mDNS client: sends a PTR query for each <see cref="MdnsServices.All"/> entry,

@@ -126,10 +126,12 @@ Milestones (detail in spec): 1 skeleton+config ✅ → 2 read path + agent JSON 
 site guide) ✅ → 11 ATEM (third device, its own binary/UDP protocol:
 `bmd atem` info/input list/status/aux list, input rename, aux set,
 program+preview set) ✅. Future, and now promised on the site's device strip: HyperDeck
-(text/TCP, port 9993), Web Presenter, and camera control. The first two both
-advertise on 9977 with **no `class=`**, identifying themselves by `product id`
-(BE73/BE74/BE8B/BE8C observed), so discovery needs a second identification path
-before either can be added. Camera is **naming, not control**: a connected camera
+(text/TCP, port 9993), Web Presenter, and camera naming. Discovery already
+finds all of them: the identification path turned out to be the **mDNS service
+name**, not the `product id` — `_hyperdeck_ctrl._tcp` carries a proper
+`class=HyperDeck` and `name=`, and `_bmd_streaming._tcp` covers the streaming
+family. Neither is mapped to a bmd device type yet, deliberately, because
+mapping a device bmd cannot drive would offer to configure it. Camera is **naming, not control**: a connected camera
 cannot be driven over the network, but its identity — what it is called, and
 therefore what it *is* on the signal map — can be configured, and that is the
 part that matters here. It belongs to the same job as discovery: making the

@@ -189,6 +189,10 @@ bmd discover --json                  # recognised devices
 bmd discover --all --json            # everything answering, including unsupported types
 ```
 
+Discovery is mDNS, so it does not cross subnets. A device that does not appear can still be
+driven by passing `--host` directly, or by setting its address in config — being undiscovered and
+being unsupported are different things.
+
 **Name every unnamed input on an ATEM.**
 
 ```

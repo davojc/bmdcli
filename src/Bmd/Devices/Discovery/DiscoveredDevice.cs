@@ -50,6 +50,27 @@ public static class DeviceClasses
         new("AtemSwitcher", "atem"),
     ];
 
+    /// <summary>The bmd device group implied by the mDNS service a device answered on.
+    ///
+    /// The newer, device-specific service names are themselves an identification: a responder on
+    /// <c>_switcher_ctrl._udp</c> is a switcher whether or not it bothers to say so in TXT, and an
+    /// HD8 ISO does not — its TXT carries a unique id and nothing else. This is the second
+    /// identification path that HyperDeck and the WebPresenter family were previously said to
+    /// need, and it turned out to be the service name rather than the <c>product id</c>.
+    ///
+    /// <para>Only services bmd can actually drive are mapped. <c>_hyperdeck_ctrl._tcp</c> is
+    /// queried and its answers are reported, but it stays unmapped for the same reason
+    /// AtemSwitcher once did: offering to configure a device bmd cannot talk to is worse than
+    /// leaving it unclassified.</para></summary>
+    public static string? DeviceTypeForService(string service) => service switch
+    {
+        _ when Is(service, MdnsServices.SwitcherControl) => "atem",
+        _ when Is(service, MdnsServices.Videohub) => "videohub",
+        _ => null,
+    };
+
+    static bool Is(string a, string b) => string.Equals(a, b, StringComparison.OrdinalIgnoreCase);
+
     /// <summary>Case-insensitive lookup of the bmd device group for a device class.
     /// Returns null for anything not in the table — never a guess.</summary>
     public static string? DeviceTypeFor(string deviceClass)
@@ -89,6 +110,15 @@ public static class DeviceAssembler
         // anywhere here would silently drop real devices whose firmware capitalizes records
         // differently.
         HashSet<string>? admittedSrvNames = null;
+        // Which service each instance was announced under. A device that advertises no class in
+        // TXT is identified by this instead, so the mapping has to survive assembly rather than
+        // being collapsed into a yes/no admission test.
+        var serviceBySrvName = new Dictionary<string, string>(StringComparer.OrdinalIgnoreCase);
+        foreach (var record in records)
+        {
+            if (record is PtrRecord p) serviceBySrvName.TryAdd(p.Target, p.Name);
+        }
+
         if (services is not null)
         {
             var queriedServices = new HashSet<string>(services, StringComparer.OrdinalIgnoreCase);
@@ -145,10 +175,47 @@ public static class DeviceAssembler
             }
 
             name ??= InstanceLabel(srv.Name);
-            devices.Add(new DiscoveredDevice(name, deviceClass, DeviceClasses.DeviceTypeFor(deviceClass), address, srv.Port, txtEntries));
+
+            // TXT first: a device that names its own class is the better authority. The service
+            // it answered on is the fallback, for the newer firmware that says nothing at all.
+            var deviceType = DeviceClasses.DeviceTypeFor(deviceClass);
+            if (deviceType is null && serviceBySrvName.TryGetValue(srv.Name, out var service))
+                deviceType = DeviceClasses.DeviceTypeForService(service);
+
+            devices.Add(new DiscoveredDevice(name, deviceClass, deviceType, address, srv.Port, txtEntries));
         }
 
-        return devices;
+        return Collapse(devices);
+    }
+
+    /// <summary>One physical box, one entry.
+    ///
+    /// A switcher with a recorder in it answers on both <c>_switcher_ctrl._udp</c> and
+    /// <c>_hyperdeck_ctrl._tcp</c>, at different ports, so it arrives here twice. Listing it twice
+    /// would be answering "what did the network say" when the question is "what is out there".
+    ///
+    /// <para>Keyed on name and address rather than address alone: two devices behind one address
+    /// is unusual but a single device with two names is not a thing, and this way a NAT or a
+    /// shared host cannot silently swallow a device. The entry bmd can drive wins; between two it
+    /// cannot, the first heard wins, which keeps the result stable.</para></summary>
+    static IReadOnlyList<DiscoveredDevice> Collapse(List<DiscoveredDevice> devices)
+    {
+        var best = new Dictionary<(string, string), DiscoveredDevice>();
+        var order = new List<(string, string)>();
+
+        foreach (var device in devices)
+        {
+            var key = (device.Name.ToLowerInvariant(), device.Address.ToString());
+            if (!best.TryGetValue(key, out var existing))
+            {
+                best[key] = device;
+                order.Add(key);
+                continue;
+            }
+            if (existing.DeviceType is null && device.DeviceType is not null) best[key] = device;
+        }
+
+        return [.. order.Select(k => best[k])];
     }
 
     static string InstanceLabel(string srvName)

@@ -61,6 +61,12 @@ before architectural changes; update it when a design decision changes.
   server in the test project — never against real hardware in CI.
 - Errors: one clear message to stderr, no stack traces. Exit codes: 0 success,
   1 operation failure, 2 usage/format error.
+- **`AGENTS.md` is the user-facing agent guide** (distinct from this file, which is for agents
+  working *on* bmd). It is embedded in the binary via an `EmbeddedResource`, printed by
+  `bmd agents`, saved by `bmd agents --write <path>`, and shipped as a release asset. It documents
+  contracts and conventions and deliberately **never lists flags** — `--help` owns those, and a
+  doc that restates them is a second source of truth that goes stale. A test checks every command
+  it names still exists in `Program.cs`.
 - **Agent-first interface.** Every command supports `--json`: one JSON
   document on stdout (camelCase, stable field names, via the source-gen
   `BmdJsonContext` — never reflection serialization). `--json` changes

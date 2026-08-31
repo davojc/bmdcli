@@ -28,6 +28,16 @@
     <InternalsVisibleTo Include="Bmd.Tests" />
   </ItemGroup>
 
+  <!-- The agent guide travels inside the binary, so `bmd agents` always prints the document that
+       matches the version actually installed, works offline, and cannot drift from the commands it
+       describes. LogicalName is fixed rather than derived from the assembly or folder names, so
+       moving or renaming either cannot silently break the lookup at runtime. Embedded resources
+       survive trimming and Native AOT; there is a test that reads it back through the same path
+       the command uses. -->
+  <ItemGroup>
+    <EmbeddedResource Include="../../AGENTS.md" LogicalName="bmd.agents.md" />
+  </ItemGroup>
+
   <!-- Stamps the build's $(Version) and $(RuntimeIdentifier) into a generated constant class
        (BuildInfo.g.cs) rather than relying on AssemblyInformationalVersionAttribute, because
        reading that back at runtime means reflection, which this project forbids for Native AOT

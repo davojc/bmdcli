@@ -154,14 +154,29 @@ jobs:
     permissions:
       contents: write
     steps:
-      # No checkout here: this job only assembles already-built artifacts and talks to the
-      # GitHub API, so it has nothing to gain from a copy of repo content plus everything
-      # to lose (a release job holds contents: write).
+      # No full checkout here: this job assembles already-built artifacts and talks to the GitHub
+      # API, so it has everything to lose from a copy of repo content (it holds contents: write).
+      # The one exception is the sparse checkout below, which takes AGENTS.md and nothing else.
       - name: Download all artifacts
         uses: actions/download-artifact@v8
         with:
           path: dist
           merge-multiple: true
+
+      # The agent guide ships as a release asset as well as inside the binary, so it can be
+      # fetched by someone who has not installed bmd yet. Checked out only for this: the job
+      # otherwise deliberately holds no copy of the repo (see the note on the download step).
+      # Into its own directory, not the workspace root: checkout cleans where it lands, and the
+      # artifacts have already been downloaded to dist/ by the step above.
+      - name: Check out the agent guide
+        uses: actions/checkout@v7
+        with:
+          sparse-checkout: AGENTS.md
+          sparse-checkout-cone-mode: false
+          path: guide
+
+      - name: Stage the agent guide
+        run: cp guide/AGENTS.md dist/AGENTS.md
 
       - name: Compute checksums
         working-directory: dist
@@ -193,6 +208,7 @@ jobs:
           | `bmd-osx-x64.tar.gz` | macOS x64 (Intel) |
           | `bmd-osx-arm64.tar.gz` | macOS ARM64 (Apple Silicon) |
           | `checksums.txt` | SHA-256 checksums of the archives above |
+          | `AGENTS.md` | How to drive bmd from an AI agent or a script (also `bmd agents`) |
           EOF
 
       - name: Create GitHub release

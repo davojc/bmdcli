@@ -83,6 +83,9 @@ app.Add("atem status", atem.Status);
 app.Add("atem program set", atem.ProgramSet);
 app.Add("atem preview set", atem.PreviewSet);
 
+var agents = new AgentsCommands();
+app.Add("agents", agents.Agents);
+
 var update = new UpdateCommands();
 app.Add("update", update.Update);
 

@@ -108,7 +108,10 @@ public sealed class AtemClient : IAsyncDisposable
         if (!AtemPacket.TryReadHeader(reply.Buffer, out var header) || !header.Flags.HasFlag(AtemFlags.Hello))
             throw new AtemProtocolException($"{Host}:{Port} did not answer with an ATEM handshake");
 
-        // The switcher's own id from here on. Sending our opening id instead is silently ignored.
+        // The Hello reply still carries OUR id — the switcher echoes it. It switches to an id of
+        // its own on the first data packet, which the receive loop adopts. Anything sent with the
+        // opening id after that point is acknowledged by nothing and acted on by nothing, which
+        // is what makes this worth a comment: the failure is completely silent.
         _session = header.Session;
         await SendAckAsync(0, deadline);
     }

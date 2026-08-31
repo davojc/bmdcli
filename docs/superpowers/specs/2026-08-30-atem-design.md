@@ -36,6 +36,20 @@ the hypothesis. That inversion shapes every decision below.
 a capture from real hardware, and two independently-derived community references. Where they agree,
 confidence is high. Where they disagree, the hardware wins and the disagreement is recorded.
 
+**The write path was settled the same way, by experiment.** A capture cannot contain a client's own
+commands, so each command was sent to a real switcher in several candidate shapes and the shape it
+acted on — pushing the corresponding state block back — is the one kept. Two findings came out of
+that, both of which had already produced a silent failure:
+
+- **Payload length is exact and differs per command.** `CInL` requires 32 bytes and is ignored at
+  28 (the size of its own fields) or 27. `CAuS`, `CPgI` and `CPvI` require exactly 4 and are
+  ignored at 8 or 12. There is no NAK in this protocol, so a wrong length is indistinguishable
+  from an unsupported command.
+- **The session reassignment happens on the first data packet, not in the handshake.** The Hello
+  reply echoes the client's own opening id; the switcher switches to an id of its own immediately
+  afterwards. A client that adopts the id from the Hello reply and stops looking gets everything
+  it sends silently ignored — acknowledged by nothing, acted on by nothing.
+
 ## What was established against real hardware
 
 A read-only probe of an **ATEM Television Studio HD III** (192.168.4.98) — handshake plus the
@@ -71,12 +85,14 @@ hardware matches PyATEMMax's independently-derived constants:
 That agreement is what justifies the input-listing decision below: the split between real inputs and
 internal sources is a genuine structural boundary, not an inference.
 
-**Three things the capture settled that no document did.** Block bytes 2-3 are a constant
-`0x0014`, not reserved-zero — validating them as zero rejects every real packet. Names must be
-read to the first NUL and never to the field width, because the device does not zero its send
-buffer: the padding after input 2's (empty) name contains the bytes `MPrp`, a real command name
-left over from an earlier block. And `AuxS` reads `00 56 00 06` — aux 0, source 6 — where that
-`0x56` is the same uninitialised garbage sitting between the index and the source id, not a field.
+**The device does not zero its send buffer, and that shapes the whole parser.** Names must be
+read to the first NUL and never to the field width: the padding after input 2's (empty) name
+contains the bytes `MPrp`, a real command name left over from an earlier block. `AuxS` reads
+`00 56 00 06` — aux 0, source 6 — where `0x56` is the same garbage sitting between the index and
+the source id, not a field. And a block's bytes 2-3 are garbage too: zero in 96 of the capture's
+287 blocks and arbitrary in the rest. They look like a constant `0x0014` if you inspect only the
+first block of each packet, which is exactly the mistake this design originally made; nothing may
+validate them, and bmd sends zero.
 
 **One documented layout is wrong for this firmware.** `PrgI` matched exactly — payload
 `00 00 00 06`, meaning M/E 0, source 6. But `PrvI` is documented as a 4-byte payload and this

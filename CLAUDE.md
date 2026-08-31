@@ -8,10 +8,14 @@ what differs is vocabulary (views, not outputs) and its own CONFIGURATION
 block (layout, output format, overlays, solo).
 Third device: ATEM (`bmd atem input rename 2 "Camera Two"`) — shares nothing
 below the command layer. Binary UDP 9910, session handshake, sequence numbers
-and ACKs, and **no published protocol at all**: read layouts come from a
-hardware capture (`docs/superpowers/plans/assets/atem-hd3-statedump.hex`),
-command layouts cannot, so every mutation waits for the device to report the
-change back rather than assuming it landed. See
+and ACKs, and **no published protocol at all**. Read layouts come from a
+hardware capture (`docs/superpowers/plans/assets/atem-hd3-statedump.hex`);
+command layouts cannot (a capture holds only what the device sent), so each was
+found by experiment against real hardware. Two traps, both of which fail
+silently because the protocol has no NAK: **payload length is exact and differs
+per command** (CInL 32, CAuS/CPgI/CPvI 4), and **the session id is reassigned on
+the first data packet, not in the handshake reply**. Every mutation waits for
+the device to report the change back rather than assuming it landed. See
 `docs/superpowers/specs/2026-08-30-atem-design.md`.
 Design spec: `docs/superpowers/specs/2026-08-29-bmd-cli-design.md` — read it
 before architectural changes; update it when a design decision changes.

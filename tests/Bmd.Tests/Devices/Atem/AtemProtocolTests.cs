@@ -106,14 +106,32 @@ public class AtemProtocolTests
     }
 
     [Fact]
-    public void Blocks_Bytes2To3AreAMarkerNotReservedZero()
+    public void Blocks_Bytes2To3AreGarbageAndMustNotBeValidated()
     {
-        // They are consistently 0x0014. A parser validating them as zero rejects every real packet.
-        Assert.All(AtemFixtures.DataPackets, p =>
-        {
-            Assert.Equal(0x00, p[14]);
-            Assert.Equal(0x14, p[15]);
-        });
+        // Read only the first block of each packet and this field looks like a constant 0x0014.
+        // It is not: across all 287 blocks it is zero in 96 and arbitrary in the rest — the same
+        // uninitialised send-buffer content that shows up in name padding. A parser validating
+        // it, as either zero or a marker, rejects most real packets.
+        var values = AtemFixtures.DataPackets
+            .SelectMany(p => AtemBlocks.ReadBlocksWithReserved(p))
+            .Select(b => b.Reserved)
+            .ToList();
+
+        Assert.Equal(287, values.Count);
+        Assert.True(values.Distinct().Count() > 50,
+            "this field was treated as a constant; it is not one");
+        Assert.Equal(96, values.Count(v => v == 0));
+        Assert.Equal(5, values.Count(v => v == 0x0014));   // one per packet: the first block only
+    }
+
+    [Fact]
+    public void Blocks_BuildSendsZeroInThatField()
+    {
+        // Zero is the commonest observed value and the safe thing to send, since the device
+        // plainly does not rely on the field itself.
+        var block = AtemBlocks.Build("CAuS", [1, 0, 0, 6]);
+        Assert.Equal(0x00, block[2]);
+        Assert.Equal(0x00, block[3]);
     }
 
     [Fact]
@@ -153,8 +171,6 @@ public class AtemProtocolTests
         Assert.Equal(12, block.Length);
         Assert.Equal(0x00, block[0]);
         Assert.Equal(0x0c, block[1]);
-        Assert.Equal(0x00, block[2]);
-        Assert.Equal(0x14, block[3]);      // the same marker the device sends
         Assert.Equal("CAuS", Encoding.ASCII.GetString(block, 4, 4));
     }
 
@@ -255,7 +271,10 @@ public class AtemProtocolTests
     public void SetInputName_MirrorsInPrWithAMaskInFront()
     {
         var payload = AtemChanges.SetInputName(6, "Lyrics Desk", "LYR2");
-        Assert.Equal(28, payload.Length);
+
+        // 32, not the 28 the fields themselves account for. Confirmed by experiment against a
+        // real switcher: at 28 or 27 it is ignored without comment.
+        Assert.Equal(32, payload.Length);
         Assert.Equal(3, payload[0]);                                    // both names
         Assert.Equal(6, (payload[2] << 8) | payload[3]);
         Assert.Equal("Lyrics Desk", AtemBlocks.ReadFixedAscii(payload.AsSpan(4, 20)));
@@ -281,6 +300,18 @@ public class AtemProtocolTests
     {
         var payload = AtemChanges.SetAuxSource(0, 3010);
         Assert.Equal([1, 0, 0x0b, 0xc2], payload);
+    }
+
+    [Fact]
+    public void CommandPayloadLengths_AreExactAndDifferPerCommand()
+    {
+        // The single most surprising thing found on hardware, and the thing to check first when
+        // adding a command: padding CInL to 32 is required, and padding CAuS/CPgI/CPvI beyond 4
+        // makes the switcher ignore them. There is no NAK, so a wrong length is silent.
+        Assert.Equal(32, AtemChanges.SetInputName(1, "x", null).Length);
+        Assert.Equal(4, AtemChanges.SetAuxSource(0, 1).Length);
+        Assert.Equal(4, AtemChanges.SetProgramSource(0, 1).Length);
+        Assert.Equal(4, AtemChanges.SetPreviewSource(0, 1).Length);
     }
 
     [Fact]

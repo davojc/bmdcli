@@ -231,19 +231,24 @@ bmd atem program set 4</code></pre>
         capture from a real ATEM Television Studio HD III, and is tested against those exact bytes.
       </li>
       <li>
-        <strong>Writing is the less certain half.</strong> A capture only contains what the
-        switcher <em>sent</em>; a client's commands never appear in it. The command layouts are
-        derived from the shape of the state each one changes, plus community documentation. To
-        contain that, <strong>bmd never reports a change it did not see the switcher confirm</strong>:
-        it sends the command, waits for the device to report the new state back, and fails with a
-        clear error if that never arrives. A wrong layout produces a visible timeout, not a silent
-        no-op reported as success.
+        <strong>Writing was settled by experiment, on hardware.</strong> A capture only contains
+        what the switcher <em>sent</em>, so no capture can confirm a command. Each command was
+        instead sent to a real switcher in several candidate shapes, and the one it acted on is
+        the one bmd uses. Renaming an input, routing an aux, and setting program and preview have
+        all been run against a real ATEM and confirmed by the device's own reported state.
       </li>
       <li>
-        <strong>Findings come from one switcher model.</strong> Model variation between ATEMs is
-        much larger than between Videohubs. bmd reads the switcher's own reported topology rather
-        than assuming any of it, but a model with different capabilities may still behave in ways
-        this has not seen.
+        <strong>bmd never reports a change it did not see confirmed.</strong> This protocol has no
+        way of saying no: a switcher that does not understand a command simply ignores it. So every
+        command is followed by a wait for the device to report the new state back, and silence is
+        treated as failure — you get <code>did not report the change</code> rather than a success
+        nobody checked. That is what caught the one command whose layout was initially wrong.
+      </li>
+      <li>
+        <strong>Findings come from one switcher model</strong> — an ATEM Television Studio HD III.
+        Model variation between ATEMs is much larger than between Videohubs. bmd reads the
+        switcher's own reported topology rather than assuming any of it, but a model with different
+        capabilities may still behave in ways this has not seen.
       </li>
       <li>
         <strong>Video mode is shown as a raw number.</strong> The mode-number-to-format table is not

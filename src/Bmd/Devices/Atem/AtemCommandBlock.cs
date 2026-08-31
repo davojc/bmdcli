@@ -19,9 +19,14 @@ public static class AtemBlocks
 {
     public const int BlockHeaderSize = 8;
 
-    /// <summary>Constant occupying bytes 2-3 of every block this device sends. Its meaning is
-    /// unknown; it is echoed on blocks we send because that is what the device does.</summary>
-    const int BlockMarker = 0x0014;
+    /// <summary>Bytes 2-3 of a block. Sent as zero.
+    ///
+    /// Not a constant, despite appearances: across the capture's 287 blocks this field is zero in
+    /// 96 and arbitrary in the rest — the same uninitialised send-buffer content that shows up in
+    /// name padding. It reads as a constant 0x0014 only if you look at the first block of each
+    /// packet and no further. Zero is both the commonest observed value and the safe thing to
+    /// send, since the device plainly does not rely on it.</summary>
+    const int BlockReserved = 0x0000;
 
     public static IReadOnlyList<AtemCommandBlock> ReadBlocks(ReadOnlyMemory<byte> packet)
     {
@@ -45,7 +50,26 @@ public static class AtemBlocks
         return blocks;
     }
 
-    /// <summary>Frames one command block for sending: length, marker, 4-character name, payload.</summary>
+    /// <summary>Blocks with bytes 2-3 exposed, for the test that proves that field is garbage
+    /// rather than the constant it resembles. Production code has no reason to look at it.</summary>
+    internal static List<(string Name, int Reserved)> ReadBlocksWithReserved(ReadOnlyMemory<byte> packet)
+    {
+        var found = new List<(string, int)>();
+        var span = packet.Span;
+        var offset = AtemPacket.HeaderSize;
+        while (offset + BlockHeaderSize <= packet.Length)
+        {
+            var length = (span[offset] << 8) | span[offset + 1];
+            if (length < BlockHeaderSize || offset + length > packet.Length) break;
+            found.Add((
+                Encoding.ASCII.GetString(span.Slice(offset + 4, 4)),
+                (span[offset + 2] << 8) | span[offset + 3]));
+            offset += length;
+        }
+        return found;
+    }
+
+    /// <summary>Frames one command block for sending: length, reserved, 4-character name, payload.</summary>
     public static byte[] Build(string name, ReadOnlySpan<byte> payload)
     {
         if (name.Length != 4) throw new ArgumentException("command name must be 4 characters", nameof(name));
@@ -54,8 +78,8 @@ public static class AtemBlocks
         var length = block.Length;
         block[0] = (byte)(length >> 8);
         block[1] = (byte)length;
-        block[2] = (byte)(BlockMarker >> 8);
-        block[3] = (byte)BlockMarker;
+        block[2] = (byte)(BlockReserved >> 8);
+        block[3] = (byte)BlockReserved;
         Encoding.ASCII.GetBytes(name).CopyTo(block, 4);
         payload.CopyTo(block.AsSpan(BlockHeaderSize));
         return block;

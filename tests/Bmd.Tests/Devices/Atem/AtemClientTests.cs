@@ -12,6 +12,23 @@ public class AtemClientTests
 {
     static readonly TimeSpan Patient = TimeSpan.FromSeconds(5);
 
+    /// <summary>Waits for asynchronous traffic to arrive before asserting on it.
+    ///
+    /// ConnectAsync returns as soon as the dump has delivered what a command needs, which is
+    /// deliberately earlier than "the switcher has gone quiet" — so the client's own
+    /// acknowledgements can still be in flight when the test resumes. Asserting immediately
+    /// passed on Windows and failed on macOS purely on scheduling.</summary>
+    static async Task WaitUntilAsync(Func<bool> settled, string because)
+    {
+        var deadline = DateTime.UtcNow + Patient;
+        while (DateTime.UtcNow < deadline)
+        {
+            if (settled()) return;
+            await Task.Delay(20);
+        }
+        Assert.Fail(because);
+    }
+
     [Fact]
     public async Task Connect_CompletesTheHandshakeAndReadsTheDump()
     {
@@ -31,9 +48,9 @@ public class AtemClientTests
         // Keep sending ours and it stops understanding us.
         await using var fake = FakeAtem.Start();
         await using var client = await AtemClient.ConnectAsync("127.0.0.1", fake.Port, Patient);
+        await WaitUntilAsync(() => fake.Received.Count > 2, "the client sent nothing after the handshake");
 
         var afterHandshake = fake.Received.Skip(2).ToList();
-        Assert.NotEmpty(afterHandshake);
         Assert.All(afterHandshake, h => Assert.Equal(fake.AssignedSession, h.Session));
     }
 
@@ -43,8 +60,10 @@ public class AtemClientTests
         await using var fake = FakeAtem.Start();
         await using var client = await AtemClient.ConnectAsync("127.0.0.1", fake.Port, Patient);
 
-        var acks = fake.Received.Count(h => h.Flags.HasFlag(AtemFlags.Ack));
-        Assert.True(acks >= 5, $"expected at least 5 acknowledgements for 5 dump packets, saw {acks}");
+        await WaitUntilAsync(
+            () => fake.Received.Count(h => h.Flags.HasFlag(AtemFlags.Ack)) >= 5,
+            $"expected at least 5 acknowledgements for 5 dump packets, saw " +
+            $"{fake.Received.Count(h => h.Flags.HasFlag(AtemFlags.Ack))}");
     }
 
     [Fact]

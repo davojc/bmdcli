@@ -1,0 +1,31 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"
+     role="img" aria-labelledby="bmd-mark-title">
+  <title id="bmd-mark-title">bmd</title>
+
+  <!-- A crosspoint. Every device bmd drives is, underneath, a grid where a signal
+       arriving on one line leaves on another: `route set 4 13` is a coordinate in
+       exactly this picture. Signal enters from the left, turns at the lit
+       crosspoint, and leaves downward.
+
+       Geometry only, no text and no font dependency, so this file is the source
+       every other artefact is generated from. currentColor drives the dim grid,
+       so the mark sits correctly on any background; the lit crosspoint keeps its
+       ember regardless, because that is the one thing that must not go quiet. -->
+
+  <g fill="currentColor" opacity="0.28">
+    <rect x="5.5" y="5.5" width="5" height="5" rx="1.25"/>
+    <rect x="21.5" y="5.5" width="5" height="5" rx="1.25"/>
+    <rect x="5.5" y="21.5" width="5" height="5" rx="1.25"/>
+    <rect x="21.5" y="21.5" width="5" height="5" rx="1.25"/>
+    <rect x="5.5" y="13.5" width="5" height="5" rx="1.25"/>
+    <rect x="13.5" y="5.5" width="5" height="5" rx="1.25"/>
+  </g>
+
+  <!-- The route: in from the left edge, turn, out through the bottom edge. -->
+  <path d="M0 16 H13.5 M16 18.5 V32"
+        stroke="#F2542D" stroke-width="2.5" stroke-linecap="square" fill="none"/>
+
+  <!-- The crosspoint itself: the only filled element, and the only one that is
+       never dimmed. -->
+  <rect x="13" y="13" width="6" height="6" rx="1.5" fill="#F2542D"/>
+</svg>

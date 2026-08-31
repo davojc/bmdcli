@@ -3,81 +3,44 @@
 <head>
 <meta charset="utf-8">
 <meta name="viewport" content="width=device-width, initial-scale=1">
-<title>bmd</title>
-<meta name="description" content="bmd — command-line control for Blackmagic Videohub routers and MultiView units. A single native binary, no dependencies.">
+<title>bmd — drive the rack from the keyboard</title>
+<meta name="description" content="bmd — command-line control for Blackmagic Videohub routers, MultiView multiviewers and ATEM switchers. One native binary, no runtime, no SDK, and every command speaks JSON.">
 <meta name="theme-color" content="#0c0d10">
-<link rel="icon" href="data:image/svg+xml;base64,PHN2ZyB4bWxucz0naHR0cDovL3d3dy53My5vcmcvMjAwMC9zdmcnIHZpZXdCb3g9JzAgMCA2NCA2NCc+PHJlY3Qgd2lkdGg9JzY0JyBoZWlnaHQ9JzY0JyByeD0nMTQnIGZpbGw9JyNmMjU0MmQnLz48dGV4dCB4PSczMicgeT0nNDUnIGZvbnQtZmFtaWx5PSdtb25vc3BhY2UnIGZvbnQtc2l6ZT0nMzAnIGZpbGw9JyMwYzBkMTAnIHRleHQtYW5jaG9yPSdtaWRkbGUnPiZndDtfPC90ZXh0Pjwvc3ZnPg==">
+<link rel="icon" href="favicon.svg" type="image/svg+xml">
+<link rel="preconnect" href="https://fonts.googleapis.com">
+<link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+<link href="https://fonts.googleapis.com/css2?family=IBM+Plex+Mono:wght@400;500;600&family=IBM+Plex+Sans+Condensed:wght@500;600;700&family=IBM+Plex+Sans:wght@400;500;600&display=swap" rel="stylesheet">
 <link rel="stylesheet" href="style.css">
 </head>
 <body>
-<div class="page">
+<div class="page page-wide">
 
   <header class="hero">
-    <p class="eyebrow">Blackmagic device CLI</p>
+    <p class="masthead"><img src="mark.svg" alt="" width="26" height="26"><b>bmd</b></p>
 
     <div class="hero-grid">
       <div class="hero-copy">
-        <h1>bmd</h1>
-        <p class="tagline">Route video from the command line.</p>
+        <h1>Drive the <em>rack</em> from the keyboard.</h1>
         <p class="lede">
-          One native binary for Blackmagic Videohub routers and MultiView units.
-          Nothing to install alongside it, no runtime, no SDK. Every command
-          documents itself and every command speaks <code>--json</code>, so
-          operators and agents drive exactly the same tool.
+          Routers, multiviewers and switchers, from one native binary — no runtime, no SDK,
+          nothing to install alongside it. <strong>Ten seconds to air is no time to be hunting
+          for a mouse.</strong>
         </p>
 
         <div class="cta-row">
           <a class="btn btn-primary" href="#download">Download</a>
-          <a class="btn" href="videohub.html">Videohub guide</a>
-          <a class="btn" href="multiview.html">MultiView guide</a>
-          <a class="btn" href="atem.html">ATEM guide</a>
-        </div>
-
-        <ul class="status-list">
-          <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> Videohub — routing, labels, locks, backups, live watch.</li>
-          <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> MultiView — views, layout, format, overlays, solo, backups, live watch.</li>
-          <li class="status-ok"><span class="status-dot" aria-hidden="true">✓</span> ATEM — input names, aux routing, program and preview, backups.</li>
-          <li class="status-pending"><span class="status-dot" aria-hidden="true">…</span> HyperDeck — not implemented yet.</li>
-        </ul>
-      </div>
-
-      <!-- The signature: a Videohub *is* a crosspoint matrix, and `route set 4 13`
-           is a coordinate in it. The state shown is the real session below —
-           outputs 1-3 all on input 1, output 5 on input 13, and output 4 moving
-           from input 3 to input 13 as the command types out. -->
-      <div class="hero-matrix">
-        <div class="matrix">
-          <div class="matrix-head">
-            <span>Out &darr; / In &rarr;</span>
-            <span class="matrix-status"><i class="led" aria-hidden="true"></i>40 &times; 40</span>
-          </div>
-
-          <!-- role="img" wraps only the dot grid, so the command line below it stays
-               readable text rather than being swallowed into the image label. -->
-          <div class="matrix-grid" role="img"
-               aria-label="Videohub routing matrix, five outputs by fourteen inputs. Outputs 1, 2 and 3 take input 1. Output 5 takes input 13. Output 4 is being re-routed from input 3 to input 13.">
-
-          <div class="mrow"><span class="rlabel">01</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
-          <div class="mrow"><span class="rlabel">02</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
-          <div class="mrow"><span class="rlabel">03</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
-          <div class="mrow"><span class="rlabel">04</span><i class="x"></i><i class="x"></i><i class="x from"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x to"></i><i class="x"></i><span class="trace" aria-hidden="true"></span></div>
-          <div class="mrow"><span class="rlabel">05</span><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x on"></i><i class="x"></i></div>
-
-          </div>
-
-          <p class="matrix-foot"><span class="typed"><span class="sign">$</span> bmd videohub route set 4 13</span></p>
+          <a class="btn" href="videohub.html">Read the guides</a>
         </div>
       </div>
-    </div>
-  </header>
 
-  <section id="demo" data-label="Session">
-    <h2>See it work</h2>
-    <p class="demo-note" style="margin-top:0;margin-bottom:0.75rem;">
-      A real session against a Videohub on the local network. Assumes the hub's address is
-      already configured — see <a href="#using">Using it</a> below.
-    </p>
-    <div class="terminal">
+      <!-- Product as hero. The previous version put an abstract matrix and a bulleted
+           feature list side by side, so nothing carried the section. This is a real
+           session against a real 40x40 on a real network: the thing itself, at size. -->
+      <div class="terminal terminal-hero">
+        <div class="term-bar" aria-hidden="true">
+          <span class="term-dot"></span><span class="term-dot"></span><span class="term-dot"></span>
+          <span class="term-title">bmd — 192.168.4.100</span>
+        </div>
 <pre><code><span class="prompt-line"><span class="prompt-sign">$</span> bmd discover</span>
 <span class="out">NAME                               TYPE      ADDRESS
 Blackmagic Smart Videohub 40 x 40  videohub  192.168.4.100:9990</span>
@@ -92,16 +55,69 @@ Blackmagic Smart Videohub 40 x 40  videohub  192.168.4.100:9990</span>
 <span class="cmd-gap"></span><span class="prompt-line"><span class="prompt-sign">$</span> bmd videohub route set 4 13</span>
 <span class="out">output 4 (FoH MV 1): FoH Sw MV → Switcher PGM
 Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-40/20260829-143512.json</span></code></pre>
+      </div>
+
+      <!-- Devices, demoted out of the headline's way. Four short chips say what is
+           supported faster than four sentences did. -->
+      <ul class="devices">
+        <li class="is-ready"><b>Videohub</b><span>routing · labels · locks · backups · watch</span></li>
+        <li class="is-ready"><b>MultiView</b><span>views · layout · format · overlays · solo</span></li>
+        <li class="is-ready"><b>ATEM</b><span>input names · aux · program &amp; preview</span></li>
+        <li class="is-soon"><b>HyperDeck</b><span>not yet</span></li>
+      </ul>
     </div>
+  </header>
+
+  <section id="routing">
+    <h2>Routing is a coordinate.</h2>
+    <p class="section-lede">
+      Every device here is a grid underneath: outputs down one side, inputs across the other, one
+      crosspoint lit per output. <code>route set 4 13</code> names a cell in it — destination
+      first, then source, the same order the front panel asks for.
+    </p>
+
+    <!-- The matrix earns its place as an explainer rather than as hero decoration:
+         the state shown is the session above — outputs 1-3 on input 1, output 5 on
+         input 13, and output 4 moving from input 3 to input 13. -->
+    <div class="matrix">
+      <div class="matrix-head">
+        <span>Out &darr; / In &rarr;</span>
+        <span class="matrix-status"><i class="led" aria-hidden="true"></i>40 &times; 40</span>
+      </div>
+
+      <div class="matrix-grid" role="img"
+           aria-label="Videohub routing matrix, five outputs by fourteen inputs. Outputs 1, 2 and 3 take input 1. Output 5 takes input 13. Output 4 is being re-routed from input 3 to input 13.">
+
+      <div class="mrow"><span class="rlabel">01</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
+      <div class="mrow"><span class="rlabel">02</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
+      <div class="mrow"><span class="rlabel">03</span><i class="x on"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i></div>
+      <div class="mrow"><span class="rlabel">04</span><i class="x"></i><i class="x"></i><i class="x from"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x to"></i><i class="x"></i><span class="trace" aria-hidden="true"></span></div>
+      <div class="mrow"><span class="rlabel">05</span><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x"></i><i class="x on"></i><i class="x"></i></div>
+
+      </div>
+
+      <p class="matrix-foot"><span class="typed"><span class="sign">$</span> bmd videohub route set 4 13</span></p>
+    </div>
+  </section>
+
+  <section id="agents">
+    <h2>Operators and agents drive the same tool.</h2>
+    <p class="section-lede">
+      Every command takes <code>--json</code> and returns exactly one document with stable field
+      names. Exit codes mean the same thing everywhere: <code>0</code> worked, <code>1</code> the
+      operation failed, <code>2</code> the command was wrong. Errors go to stderr either way, so
+      nothing has to read stdout to find out whether it succeeded.
+    </p>
+    <pre class="cmd"><code>bmd agents --skill</code></pre>
     <p class="demo-note">
-      Every mutating command backs up the device first — see the
-      <a href="videohub.html#backups">Videohub guide</a> for where those files live.
+      Installs the whole contract as an agent skill, loaded only when a task actually involves
+      Blackmagic hardware — never into your project's own instructions file.
     </p>
   </section>
 
-  <section id="download" data-label="Binaries">
+  <section id="download">
     <h2>Download</h2>
-    <p>Prebuilt, single-file native binaries. No .NET runtime to install.</p>
+    <p class="section-lede">Prebuilt, single-file native binaries. No .NET runtime to install.</p>
     <ul class="downloads">
       <li>
         <a class="download-link" data-platform="win-x64"
@@ -146,21 +162,20 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
     </p>
   </section>
 
-  <section id="using" data-label="Commands">
-    <h2>Using it</h2>
+  <section id="using">
+    <h2>The whole vocabulary.</h2>
 
-    <p>Point bmd at your hub once — it remembers, for your user, wherever you run it.</p>
+    <p class="section-lede">Point bmd at a device once — it remembers, for your user, wherever you run it.</p>
     <pre class="cmd"><code>bmd discover --add</code></pre>
     <p class="demo-note">
-      Or set the address by hand, if you already know it or discovery doesn't reach it (see the
-      <a href="videohub.html#known-limitations">guide's known limitations</a>):
+      Or set the address by hand:
       <code>bmd config set videohub.host 192.168.1.50</code>. Add <code>--project</code> to pin a
-      device to the current folder instead, via a <code>.bmdconfig</code> there.
+      device to the current folder instead, or a <code>--context</code> to keep a second device of
+      the same type alongside the first.
     </p>
 
     <p>
-      After that, this is the whole working vocabulary. Inputs and outputs are numbered the way
-      the front panel numbers them, starting at 1.
+      Inputs and outputs are numbered the way the front panel numbers them, starting at 1.
     </p>
 
     <dl class="commands">
@@ -178,7 +193,7 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
       </div>
       <div>
         <dt>bmd videohub input list</dt>
-        <dd>Input numbers and their labels. <code>output list</code> does the same for outputs, plus routing and locks.</dd>
+        <dd>Input numbers and their labels. <code>output list</code> does the same for outputs, plus their lock state.</dd>
       </div>
       <div>
         <dt>bmd videohub input rename 3 "Camera 2"</dt>
@@ -217,12 +232,12 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
         <dd>Name an input on an ATEM, so the label shows up in its multiviewer and in every other controller. See the <a href="atem.html">ATEM guide</a>.</dd>
       </div>
       <div>
-        <dt>bmd atem aux set 1 4</dt>
-        <dd>Point auxiliary output 1 at source 4 — the usual feed for a stage monitor or a recorder.</dd>
+        <dt>bmd atem aux set 1 Stage</dt>
+        <dd>Point auxiliary output 1 at a source, by name or by id — the usual feed for a stage monitor or a recorder.</dd>
       </div>
       <div>
-        <dt>bmd agents</dt>
-        <dd>Print the guide for driving bmd from an AI agent or a script &mdash; the contracts that hold across every command, and the conventions that surprise people. <code>bmd agents --skill</code> installs it as an agent skill, loaded only when a task actually involves Blackmagic hardware.</dd>
+        <dt>bmd atem context set gallery</dt>
+        <dd>Choose which of several switchers the commands act on. <code>context list</code> shows them all.</dd>
       </div>
       <div>
         <dt>--json</dt>
@@ -235,7 +250,7 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
     </p>
     <pre class="cmd"><code>bmd videohub route set --help</code></pre>
     <p class="verify">
-      Anything that changes the hub snapshots it first, so there is always a way back — see
+      Anything that changes a device snapshots it first, so there is always a way back — see
       <a href="videohub.html#backups">backups</a> in the guide.
     </p>
   </section>
@@ -243,12 +258,11 @@ Backup: ~/.local/state/bmd/backups/192-168-4-100_blackmagic-smart-videohub-40-x-
   <section id="guide">
     <div class="guide-callout">
       <p>
-        This page only shows a slice of what <code>bmd</code> does. The
-        <a href="videohub.html"><strong>Videohub guide</strong></a> and the
-        <a href="multiview.html"><strong>MultiView guide</strong></a> and the
-        <a href="atem.html"><strong>ATEM guide</strong></a> each cover every command in
-        their group, the backup workflow, scripting with <code>--json</code>, and
-        troubleshooting.
+        This page shows a slice. The
+        <a href="videohub.html"><strong>Videohub guide</strong></a>,
+        <a href="multiview.html"><strong>MultiView guide</strong></a> and
+        <a href="atem.html"><strong>ATEM guide</strong></a> each cover every command in their
+        group, the backup workflow, scripting with <code>--json</code>, and troubleshooting.
       </p>
     </div>
   </section>

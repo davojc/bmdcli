@@ -1,12 +1,18 @@
-/* bmd project site — hand-written, no framework, no web fonts, no CDN.
+/* bmd project site — hand-written, no framework, no CDN but Google Fonts.
    The page is committed to a single dark scheme rather than following the OS:
    this tool lives in equipment racks and darkened control rooms, and a fixed
    palette keeps the contrast budget to one combination instead of two.
 
-   Type has no display face to lean on (no web fonts), so the personality comes
-   from treatment instead: the display voice is monospace, because the product's
-   voice is a terminal. Sans is reserved for prose. Uppercase mono micro-labels
-   stand in for the legends silkscreened on equipment front panels. */
+   TYPE. One superfamily, three voices, all of it IBM Plex — drawn for an
+   engineering identity, and the only widely-available family with a true
+   condensed cut, a humanist text cut and a mono sibling that were designed
+   together. That matters here because the page has to speak in all three
+   registers at once: condensed for headings, the way legends are silkscreened
+   on to a 19-inch rack panel; text for prose; mono for the terminal and for the
+   four-character labels broadcast equipment is covered in.
+
+   Every face is loaded with a full local fallback stack, so a blocked font host
+   degrades to a working page rather than a broken one. */
 
 :root {
   /* Signature. "Ember" is the tally/record red-orange of broadcast gear, and it
@@ -33,12 +39,15 @@
   --fg-faint: #79818e;            /* 5.0:1 — the floor, since it carries 0.7rem labels */
   --link: #ff8a6b;                /* lighter than --signal: easier at prose size */
 
-  --font-sans: -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, Helvetica, Arial,
-    sans-serif;
-  --font-mono: ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas, "Liberation Mono",
-    Menlo, monospace;
+  --font-display: "IBM Plex Sans Condensed", "Roboto Condensed", "Arial Narrow",
+    -apple-system, BlinkMacSystemFont, "Segoe UI", sans-serif;
+  --font-sans: "IBM Plex Sans", -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto,
+    Helvetica, Arial, sans-serif;
+  --font-mono: "IBM Plex Mono", ui-monospace, SFMono-Regular, "Cascadia Mono", Consolas,
+    "Liberation Mono", Menlo, monospace;
 
-  --measure: 46rem;               /* prose column, and the whole page */
+  --measure: 46rem;               /* prose column, and every guide page */
+  --wide: 68rem;                  /* the landing page's own, wider, measure */
 }
 
 * {
@@ -62,6 +71,18 @@ body {
   max-width: var(--measure);
   margin: 0 auto;
   padding: 2.5rem 1.25rem 4rem;
+}
+
+/* The landing page only. A guide is prose and wants a 46rem measure; the landing
+   page has to hold a terminal at its natural width and a headline at display
+   size, and squeezing those into a reading column is what made it feel like a
+   README with a stylesheet rather than a product page. */
+.page-wide {
+  max-width: var(--wide);
+}
+
+.page-wide section {
+  margin-top: clamp(4rem, 9vw, 7rem);
 }
 
 a {
@@ -93,6 +114,17 @@ h3 {
   line-height: 1.15;
 }
 
+h3 {
+  font-family: var(--font-display);
+  letter-spacing: -0.01em;
+}
+
+/* Prose sits a little larger and looser than the browser default: this page is
+   read on a laptop in a control room, not scanned. */
+.page-wide p {
+  font-size: 1.0625rem;
+}
+
 /* ---------- Section rhythm ----------
    One rule governs the gap between sections, so nothing later can quietly
    double it up by adding its own top margin. */
@@ -106,11 +138,26 @@ section > h2 {
   margin: 0 0 1.15rem;
   padding-bottom: 0.55rem;
   border-bottom: 1px solid var(--line);
-  font-family: var(--font-mono);
-  font-size: 1.05rem;
-  font-weight: 700;
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
   letter-spacing: -0.01em;
 }
+
+/* On the landing page the headings carry a section rather than label a paragraph,
+   so they get display scale and drop the rule — the generous gap above already
+   separates them, and a line under every one of them made the page read as a
+   stack of documentation. */
+.page-wide section > h2 {
+  margin-bottom: clamp(1.25rem, 2.5vw, 2rem);
+  padding-bottom: 0;
+  border-bottom: 0;
+  font-size: clamp(1.9rem, 4vw, 2.6rem);
+  line-height: 1.05;
+  letter-spacing: -0.02em;
+}
+
+.page-wide section > h2::after { content: none; }
 
 /* A short ember tick riding on each section rule — the one repeated flourish. */
 section > h2::after {
@@ -149,21 +196,56 @@ section[data-label]::before {
   color: var(--fg-faint);
 }
 
-/* Copy above, matrix below, full column width. A two-column hero was tried and
-   dropped: at this measure it squeezed the matrix to ~22rem, where 14 input
-   columns stop being legible. Full width lets it read like the router's own
-   front panel, which is the whole point of it. */
+/* One focal point. The previous hero made `bmd` the largest thing on the page and
+   demoted the claim to a subtitle, then set a matrix and a feature list beside it
+   competing for the same attention. A product name is not a headline: nobody
+   arrives already wanting `bmd`, they arrive wanting the rack driven from a
+   keyboard. So the claim is the headline, the wordmark shrinks to a masthead, and
+   exactly one image carries the section. */
 .hero-grid {
   display: grid;
-  gap: 2.5rem;
+  gap: clamp(2.5rem, 5vw, 3.5rem);
+}
+
+/* The masthead: mark plus wordmark, small, at the top — an identity rather than a
+   headline. */
+.masthead {
+  display: flex;
+  align-items: center;
+  gap: 0.6rem;
+  margin: 0 0 clamp(3rem, 8vw, 5rem);
+}
+
+.masthead img {
+  width: 26px;
+  height: 26px;
+  display: block;
+}
+
+.masthead b {
+  font-family: var(--font-display);
+  font-size: 1.35rem;
+  font-weight: 600;
+  letter-spacing: -0.02em;
+  color: var(--fg);
 }
 
 .hero h1 {
   margin: 0;
-  font-family: var(--font-mono);
-  font-size: clamp(3.2rem, 11vw, 5rem);
-  font-weight: 700;
-  letter-spacing: -0.055em;
+  max-width: 16ch;
+  font-family: var(--font-display);
+  font-size: clamp(2.9rem, 8.5vw, 5.5rem);
+  font-weight: 600;
+  line-height: 0.98;
+  letter-spacing: -0.025em;
+  text-wrap: balance;
+}
+
+/* The one place the signature colour appears in prose: the word the whole tool is
+   about. */
+.hero h1 em {
+  font-style: normal;
+  color: var(--signal);
 }
 
 .tagline {
@@ -176,9 +258,20 @@ section[data-label]::before {
 }
 
 .lede {
-  margin: 1rem 0 0;
+  margin: 1.25rem 0 0;
   color: var(--fg-dim);
-  max-width: 42ch;
+  max-width: 46ch;
+  font-size: 1.15rem;
+  line-height: 1.55;
+}
+
+/* The one aphoristic line under the headline, in the Raycast register: a claim
+   about how the work feels, not a list of what the tool has. Kept to a single
+   sentence — the moment it needs a second it stops being a headline's partner
+   and starts being body copy. */
+.hero .lede strong {
+  color: var(--fg);
+  font-weight: 500;
 }
 
 .lede code {
@@ -811,4 +904,160 @@ footer .disclaimer {
   .typed {
     border-right-color: transparent;
   }
+}
+
+/* ==========================================================================
+   Landing page (.page-wide) additions
+   ========================================================================== */
+
+/* ---------- Terminal as the hero image ----------
+   The terminal was already on the page, buried below a matrix and a feature
+   list. Given a window chrome and room to breathe it becomes the thing the
+   section is about, which is the one lesson worth taking from the tools this
+   was measured against: show the product, at size, and say one thing about it. */
+
+.terminal-hero {
+  margin: 0;
+  border-radius: 12px;
+  overflow: hidden;
+  border: 1px solid var(--line);
+  /* A single soft ember cast from behind, and no other glow anywhere on the
+     page — the budget for atmosphere is spent once, here. */
+  box-shadow:
+    0 0 0 1px rgba(0, 0, 0, 0.4),
+    0 30px 80px -30px rgba(0, 0, 0, 0.9),
+    0 0 120px -60px var(--signal-glow);
+}
+
+.term-bar {
+  display: flex;
+  align-items: center;
+  gap: 0.45rem;
+  padding: 0.7rem 0.9rem;
+  background: var(--panel);
+  border-bottom: 1px solid var(--line-soft);
+}
+
+.term-dot {
+  width: 10px;
+  height: 10px;
+  border-radius: 50%;
+  background: var(--line);
+  flex: none;
+}
+
+/* Only the first light is lit, in ember: the window is "recording", which is
+   what a control-room screen showing a live rack actually is. */
+.term-dot:first-child { background: var(--signal); }
+
+.term-title {
+  margin-left: auto;
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.04em;
+  color: var(--fg-faint);
+}
+
+.terminal-hero pre {
+  margin: 0;
+  padding: 1.1rem 1.2rem 1.35rem;
+  overflow-x: auto;
+  font-size: 0.82rem;
+  line-height: 1.65;
+}
+
+@media (min-width: 60rem) {
+  .terminal-hero pre { font-size: 0.9rem; }
+}
+
+/* ---------- Supported devices ---------- */
+
+.devices {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+  display: grid;
+  gap: 0.75rem;
+  grid-template-columns: repeat(auto-fit, minmax(13rem, 1fr));
+}
+
+.devices li {
+  padding: 0.85rem 1rem;
+  border: 1px solid var(--line-soft);
+  border-radius: 10px;
+  background: var(--panel);
+  display: flex;
+  flex-direction: column;
+  gap: 0.2rem;
+}
+
+.devices b {
+  font-family: var(--font-display);
+  font-size: 1.05rem;
+  font-weight: 600;
+  letter-spacing: -0.01em;
+}
+
+.devices span {
+  font-family: var(--font-mono);
+  font-size: 0.7rem;
+  letter-spacing: 0.02em;
+  color: var(--fg-faint);
+}
+
+/* Status is carried by a hairline on the leading edge rather than a tick glyph:
+   supported reads as live, pending as dark, the way a panel of tally lamps does. */
+.devices .is-ready { border-left: 2px solid var(--signal); }
+.devices .is-soon { border-left: 2px solid var(--line); opacity: 0.6; }
+
+/* ---------- Section ledes ---------- */
+
+.page-wide .section-lede {
+  margin: 0 0 1.5rem;
+  max-width: 60ch;
+  font-size: 1.0625rem;
+  color: var(--fg-dim);
+}
+
+.page-wide .section-lede code { color: var(--fg); }
+
+/* ---------- Wide-viewport layout ----------
+   Two columns only once there is genuinely room for both a 46rem terminal and a
+   readable column beside it. Below that the hero stacks, which is also the order
+   it reads in: claim, then proof, then scope. */
+
+@media (min-width: 64rem) {
+  .hero-grid {
+    grid-template-columns: minmax(0, 0.85fr) minmax(0, 1.15fr);
+    align-items: center;
+    column-gap: 3.5rem;
+  }
+
+  .hero-copy { grid-column: 1; }
+  .terminal-hero { grid-column: 2; }
+
+  /* The device strip spans both columns, under the fold-line of the hero. */
+  .devices {
+    grid-column: 1 / -1;
+    margin-top: 1.5rem;
+  }
+
+  /* The matrix is a diagram, not prose: it gets the full width it needs to keep
+     fourteen input columns legible. */
+  .page-wide .matrix { max-width: 52rem; }
+
+  .page-wide .commands { column-gap: 3rem; }
+}
+
+/* The download grid earns two columns on a wide page. */
+@media (min-width: 48rem) {
+  .page-wide .downloads {
+    display: grid;
+    grid-template-columns: repeat(2, minmax(0, 1fr));
+    gap: 0.6rem;
+  }
+}
+
+@media (prefers-reduced-motion: reduce) {
+  .terminal-hero { box-shadow: 0 0 0 1px rgba(0, 0, 0, 0.4); }
 }

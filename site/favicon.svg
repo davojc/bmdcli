@@ -1,0 +1,27 @@
+<svg xmlns="http://www.w3.org/2000/svg" viewBox="0 0 32 32" width="32" height="32"
+     role="img" aria-labelledby="bmd-favicon-title">
+  <title id="bmd-favicon-title">bmd</title>
+
+  <!-- The tiled variant of mark.svg, for browser tabs and app icons, where the mark
+       needs to carry its own background rather than borrow the page's.
+
+       Redrawn rather than referencing mark.svg: an <image> or <use> across files
+       does not survive being rasterised by the tools that generate .ico and .png
+       artefacts. The geometry is inset and the route stops at the tile edge, so
+       nothing is clipped by the rounded corners at 16px.  -->
+
+  <rect width="32" height="32" rx="7" fill="#0C0D10"/>
+
+  <g fill="#E6E8EC" opacity="0.24">
+    <rect x="7" y="7" width="4" height="4" rx="1"/>
+    <rect x="21" y="7" width="4" height="4" rx="1"/>
+    <rect x="7" y="21" width="4" height="4" rx="1"/>
+    <rect x="21" y="21" width="4" height="4" rx="1"/>
+    <rect x="7" y="14" width="4" height="4" rx="1"/>
+    <rect x="14" y="7" width="4" height="4" rx="1"/>
+  </g>
+
+  <path d="M4 16 H13.5 M16 18.5 V28"
+        stroke="#F2542D" stroke-width="2.25" stroke-linecap="round" fill="none"/>
+  <rect x="13" y="13" width="6" height="6" rx="1.5" fill="#F2542D"/>
+</svg>

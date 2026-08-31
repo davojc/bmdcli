@@ -201,28 +201,54 @@ public static class Diagram
           border: 1px solid var(--line); border-radius: 5px; padding: .18rem .45rem; }
         .unreachable { margin: 1rem 0 0; padding: .8rem 1rem; border: 1px solid var(--line);
           border-left: 2px solid var(--signal); border-radius: 8px; background: var(--panel); color: var(--dim); }
-        .flow { position: relative; display: grid; grid-template-columns: 1fr 5.5rem 1fr;
+        /* The gutter is where the diagram actually happens, so it gets the leftover width rather
+           than a share of it. Label columns are capped instead of flexible: as `1fr` they took
+           roughly 28rem each on a wide screen and squeezed the connectors into a bundle, when a
+           label like "Streaming Pro Presenter" needs about 15. Cap them and the wires get
+           everything else. */
+        .flow { position: relative; display: grid;
+          grid-template-columns: minmax(7rem, 16rem) minmax(6rem, 1fr) minmax(7rem, 16rem);
           gap: 0; margin-top: 1.25rem; align-items: start; }
+        /* Absolutely positioned, so it is OUT of the grid flow. That is the point — it overlays
+           the whole diagram — but it also means the grid has only two in-flow children, and
+           without the explicit placement below the destination column falls into the middle
+           track and the third is left empty. Measured, not assumed: the tracks came out
+           256/696/256 with the destinations sitting in the 696 and no gutter at all. */
         .wires { position: absolute; inset: 0; width: 100%; height: 100%; pointer-events: none; overflow: visible; }
+        .srcs { grid-column: 1; }
+        .dsts { grid-column: 3; }
         .wires path { fill: none; stroke: var(--line); stroke-width: 1.25; transition: stroke .12s, opacity .12s; }
         .wires path.lit { stroke: var(--signal); stroke-width: 2; }
         .flow.tracing .wires path:not(.lit) { opacity: .18; }
-        .col { list-style: none; margin: 0; padding: 0; display: grid; gap: .25rem; align-content: start; }
+        .col { list-style: none; margin: 0; padding: 0; display: flex; flex-direction: column; gap: .25rem; }
+        /* Set by the script when one column is much shorter than the other: 18 sources feeding 40
+           destinations otherwise crowd into the top third and every line leaves at the same steep
+           angle. Spread over the same height, the fan is readable. */
+        .col.spread { gap: 0; justify-content: space-between; }
         .col li { display: flex; align-items: baseline; gap: .5rem; padding: .3rem .55rem;
           border: 1px solid transparent; border-radius: 7px; cursor: default; transition: background .12s, border-color .12s; }
         .col li:hover, .col li:focus-visible { outline: none; background: var(--panel); border-color: var(--line); }
         .col li.lit { background: var(--panel); border-color: var(--signal); }
         .flow.tracing .col li:not(.lit) { opacity: .3; }
         .srcs li { justify-content: flex-start; }
-        .dsts li { flex-direction: row-reverse; text-align: right; }
+        /* Mirrored, but packed toward the gutter rather than away from it. With row-reverse the
+           main axis runs right-to-left, so flex-end is the left edge — which is where the wires
+           arrive. Right-aligning instead put the text at the far side of the column, a whole
+           track away from the line pointing at it. */
+        .dsts li { flex-direction: row-reverse; justify-content: flex-end; text-align: left; }
         .num { font-family: var(--mono); font-size: .64rem; letter-spacing: .05em; color: var(--signal);
           border: 1px solid var(--line); border-radius: 4px; padding: .08rem .3rem; white-space: nowrap;
           font-variant-numeric: tabular-nums; flex: none; }
-        .lbl { font-size: .92rem; overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
-        .srcs .lbl { flex: 1; }
-        .dsts .lbl { flex: 1; }
+        /* Never flex: 1. A label that stretches to fill its column pins that grid track to its
+           maximum however short the text is, and the gutter — the only column that actually wants
+           the space — gets whatever is left. Sized to content, the tracks shrink and the diagram
+           grows. */
+        .lbl { font-size: .92rem; flex: 0 1 auto; min-width: 0;
+          overflow: hidden; text-overflow: ellipsis; white-space: nowrap; }
+        /* Auto margin rather than a flexible label: it pushes the count to the far edge without
+           making the track wide enough to hold it there. */
         .fan { font-family: var(--mono); font-size: .64rem; color: var(--faint); flex: none;
-          font-variant-numeric: tabular-nums; }
+          margin-left: auto; padding-left: .5rem; font-variant-numeric: tabular-nums; }
         footer { margin-top: 3.5rem; padding-top: 1rem; border-top: 1px solid var(--line-soft);
           color: var(--faint); font-size: .8rem; max-width: 52rem; }
         @media (max-width: 46rem) {
@@ -266,6 +292,8 @@ public static class Diagram
               paths.length = 0;
               for (var k in byNode) delete byNode[k];
 
+              spread();
+
               var box = flow.getBoundingClientRect();
               svg.setAttribute("viewBox", "0 0 " + box.width + " " + box.height);
 
@@ -290,6 +318,31 @@ public static class Diagram
                 (byNode[pair[0]] = byNode[pair[0]] || []).push(record);
                 (byNode[pair[1]] = byNode[pair[1]] || []).push(record);
               });
+            }
+
+            // Stretch the shorter column to the taller one's height so the connectors fan across
+            // the whole diagram instead of bunching. Measured rather than calculated: the columns
+            // hold wrapped text whose height depends on the font that actually resolved.
+            function spread() {
+              var srcs = flow.querySelector(".srcs");
+              var dsts = flow.querySelector(".dsts");
+              if (!srcs || !dsts) return;
+
+              srcs.classList.remove("spread");
+              dsts.classList.remove("spread");
+              srcs.style.height = "";
+              dsts.style.height = "";
+              if (window.matchMedia && window.matchMedia("(max-width: 46rem)").matches) return;
+
+              var a = srcs.getBoundingClientRect().height;
+              var b = dsts.getBoundingClientRect().height;
+              // Only worth doing when the difference is real; stretching by a few pixels just
+              // makes the row spacing look accidental.
+              if (Math.abs(a - b) < 24) return;
+
+              var shorter = a < b ? srcs : dsts;
+              shorter.style.height = Math.max(a, b) + "px";
+              shorter.classList.add("spread");
             }
 
             function trace(id) {

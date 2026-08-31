@@ -95,12 +95,16 @@ cannot shadow source 4.
 A matrix router: any input to any output. `bmd videohub info` reports the size.
 
 ```
-bmd videohub route list
+bmd videohub route list           # what each output is showing
+bmd videohub output list          # the outputs themselves: labels and locks
 bmd videohub route set 3 7        # destination FIRST: output 3 now shows input 7
 bmd videohub input rename 2 "Camera 2"
 bmd videohub output lock 5
 bmd videohub watch                # stream changes, including other controllers'
 ```
+
+`route list` and `output list` answer different questions and do not overlap: routing lives in the
+first, an output's own label and lock state in the second. Ask for both if you need both.
 
 **Argument order is destination-first**, matching the front panel. On a square router the two
 numbers are interchangeable to a validator, so nothing can detect a swapped pair — get it right.

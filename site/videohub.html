@@ -107,17 +107,19 @@ Video outputs:  40</code></pre>
 4   Stage:Back:A:Cam
 …</code></pre>
     <pre class="cmd"><code>bmd videohub output list</code></pre>
-    <pre class="cmd cmd-out"><code>N   LABEL                   INPUT  INPUT LABEL              LOCK
-1   Projector AR            1      FoH Sw PGM               unlocked
-2   Projector AL            1      FoH Sw PGM               unlocked
-3   Stage Screen            1      FoH Sw PGM               unlocked
-4   FoH MV 1                3      FoH Sw MV                unlocked
+    <pre class="cmd cmd-out"><code>N   LABEL                   LOCK
+1   Projector AR            unlocked
+2   Projector AL            unlocked
+3   Stage Screen            unlocked
+4   FoH MV 1                unlocked
 …</code></pre>
     <p>
-      <code>output list</code> shows the lock column too — <code>unlocked</code>,
-      <code>owned</code> (locked by this session), or <code>locked</code> (locked by someone
-      else). If you only care about routing, <code>route list</code> is the same information
-      without the lock column:
+      The lock column is <code>unlocked</code>, <code>owned</code> (locked by this session), or
+      <code>locked</code> (locked by someone else).
+    </p>
+    <p>
+      <code>output list</code> describes the outputs themselves. What each one is currently
+      <em>showing</em> is a separate question, and <code>route list</code> answers it:
     </p>
     <pre class="cmd"><code>bmd videohub route list</code></pre>
     <pre class="cmd cmd-out"><code>OUT  OUTPUT LABEL            IN  INPUT LABEL

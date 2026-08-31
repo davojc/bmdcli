@@ -8,7 +8,10 @@ public sealed record VideohubInputEntry(int N, string Label);
 
 /// <summary>One output (1-based) with its label, routed input (1-based), the routed
 /// input's label, and lock state (<c>"unlocked"</c>, <c>"owned"</c>, or <c>"locked"</c>).</summary>
-public sealed record VideohubOutputEntry(int N, string Label, int Input, string InputLabel, string Lock);
+/// <summary>One output's own properties. Deliberately carries no routing: `route list` owns that,
+/// and this used to duplicate it field for field under different names — `n`/`output`,
+/// `label`/`outputLabel` — leaving two schemas for one table.</summary>
+public sealed record VideohubOutputEntry(int N, string Label, string Lock);
 
 /// <summary>One routed connection: an output (1-based) and the input (1-based) feeding it,
 /// with both labels.</summary>

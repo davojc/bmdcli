@@ -136,19 +136,30 @@ public class VideohubCommandsTests : IDisposable
     }
 
     [Fact]
-    public async Task OutputList_Json_IncludesRouteAndLock()
+    public async Task OutputList_Json_IsLabelsAndLocks()
     {
         await using var fake = FakeVideohub.Start();
         Assert.Equal(0, await Commands().OutputList(host: "127.0.0.1", port: fake.Port, json: true));
         var root = JsonDocument.Parse(_stdout.ToString()).RootElement;
-        var first = root[0]; // output 1: wire route 0←3, lock U
+        var first = root[0]; // output 1: lock U
         Assert.Equal(1, first.GetProperty("n").GetInt32());
         Assert.Equal("Program", first.GetProperty("label").GetString());
-        Assert.Equal(4, first.GetProperty("input").GetInt32());
-        Assert.Equal("Cam 4", first.GetProperty("inputLabel").GetString());
         Assert.Equal("unlocked", first.GetProperty("lock").GetString());
         Assert.Equal("owned", root[1].GetProperty("lock").GetString());
         Assert.Equal("locked", root[2].GetProperty("lock").GetString());
+    }
+
+    [Fact]
+    public async Task OutputList_CarriesNoRouting_ThatIsRouteListsJob()
+    {
+        // These two commands used to return the same table under two sets of field names, which
+        // is two schemas for one thing. `route list` owns routing; this owns the outputs.
+        await using var fake = FakeVideohub.Start();
+        Assert.Equal(0, await Commands().OutputList(host: "127.0.0.1", port: fake.Port, json: true));
+
+        var first = JsonDocument.Parse(_stdout.ToString()).RootElement[0];
+        Assert.False(first.TryGetProperty("input", out _));
+        Assert.False(first.TryGetProperty("inputLabel", out _));
     }
 
     [Fact]

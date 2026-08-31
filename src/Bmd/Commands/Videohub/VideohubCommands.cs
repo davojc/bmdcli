@@ -65,7 +65,7 @@ public class VideohubCommands
             return 0;
         });
 
-    /// <summary>List outputs (1-based) with label, routed input, and lock state.</summary>
+    /// <summary>List outputs (1-based) with their labels and lock state. For what each output is showing, use `bmd videohub route list`.</summary>
     /// <param name="host">Device address; defaults to config videohub.host.</param>
     /// <param name="port">Device TCP port; defaults to config videohub.port, else 9990.</param>
     /// <param name="timeout">Connection and command timeout in seconds; defaults to config videohub.timeout, else 5.</param>
@@ -75,16 +75,14 @@ public class VideohubCommands
         {
             var state = client.State;
             var entries = Enumerable.Range(1, state.Device.VideoOutputs)
-                .Select(n => new VideohubOutputEntry(
-                    n, state.GetOutputLabel(n), state.GetRoute(n),
-                    state.GetInputLabel(state.GetRoute(n)), LockWord(state.GetLock(n))))
+                .Select(n => new VideohubOutputEntry(n, state.GetOutputLabel(n), LockWord(state.GetLock(n))))
                 .ToArray();
             if (json)
                 Console.WriteLine(JsonSerializer.Serialize(entries, BmdJsonContext.Default.VideohubOutputEntryArray));
             else
-                Table.Write(["N", "LABEL", "INPUT", "INPUT LABEL", "LOCK"],
+                Table.Write(["N", "LABEL", "LOCK"],
                     entries.Select(e => (IReadOnlyList<string>)
-                        [e.N.ToString(), e.Label, e.Input.ToString(), e.InputLabel, e.Lock]).ToArray());
+                        [e.N.ToString(), e.Label, e.Lock]).ToArray());
             return 0;
         });
 

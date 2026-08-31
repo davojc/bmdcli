@@ -34,7 +34,7 @@ internal static class GroupHelp
         new("config list", "List all effective configuration values."),
         new("videohub info", "Show device information (model, protocol version, input/output counts)."),
         new("videohub input list", "List inputs (1-based) with their labels."),
-        new("videohub output list", "List outputs (1-based) with label, routed input, and lock state."),
+        new("videohub output list", "List outputs (1-based) with their labels and lock state."),
         new("videohub route list", "List the current routing (1-based): which input feeds each output."),
         new("videohub watch", "Stream device changes as they happen, including changes made by other controllers. Numbering is 1-based."),
         new("videohub export", "Export a verified snapshot of labels and routing (1-based). Locks are not captured."),

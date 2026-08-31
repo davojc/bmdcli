@@ -55,7 +55,7 @@ public static class Diagram
               <header class="top">
                 <p class="eyebrow">Signal flow</p>
                 <h1>{reachable.Count} device{(reachable.Count == 1 ? "" : "s")}</h1>
-                <p class="stamp">As at {Text(generatedAt.ToString("yyyy-MM-dd HH:mm"))} UTC &middot; hover or tab a name to trace what it feeds</p>
+                <p class="stamp">As at {Text(generatedAt.ToString("yyyy-MM-dd HH:mm"))} UTC &middot; hover to trace a signal, click to keep it, Esc to clear</p>
               </header>
 
             """);
@@ -226,9 +226,15 @@ public static class Diagram
            angle. Spread over the same height, the fan is readable. */
         .col.spread { gap: 0; justify-content: space-between; }
         .col li { display: flex; align-items: baseline; gap: .5rem; padding: .3rem .55rem;
-          border: 1px solid transparent; border-radius: 7px; cursor: default; transition: background .12s, border-color .12s; }
+          border: 1px solid transparent; border-radius: 7px; cursor: pointer;
+          transition: background .12s, border-color .12s; }
         .col li:hover, .col li:focus-visible { outline: none; background: var(--panel); border-color: var(--line); }
         .col li.lit { background: var(--panel); border-color: var(--signal); }
+        /* A pin outlives the cursor, so it needs to be legible without one: the marker is what
+           tells you the highlight is being held rather than merely hovered. */
+        .col li.pinned { background: var(--panel); border-color: var(--signal); }
+        .col li.pinned .num { background: var(--signal); color: #0c0d10; border-color: var(--signal); }
+        .wires path.pinned { stroke: var(--signal); stroke-width: 2.25; }
         .flow.tracing .col li:not(.lit) { opacity: .3; }
         .srcs li { justify-content: flex-start; }
         /* Mirrored, but packed toward the gutter rather than away from it. With row-reverse the
@@ -345,29 +351,69 @@ public static class Diagram
               shorter.classList.add("spread");
             }
 
-            function trace(id) {
+            // Hover previews, a click keeps it. Hovering while something is pinned previews over
+            // the top and falls back to the pin on the way out, which is what makes it possible to
+            // compare two paths without losing the one you were looking at.
+            var pinned = null;
+            var hovered = null;
+
+            function show() {
+              var id = hovered || pinned;
               var lit = byNode[id] || [];
+
               flow.classList.toggle("tracing", !!id);
-              paths.forEach(function (r) { r.path.classList.remove("lit"); });
+              paths.forEach(function (r) { r.path.classList.remove("lit", "pinned"); });
               Array.prototype.forEach.call(flow.querySelectorAll("li"), function (li) {
-                li.classList.remove("lit");
+                li.classList.remove("lit", "pinned");
               });
               if (!id) return;
+
+              var held = id === pinned;
               lit.forEach(function (r) {
-                r.path.classList.add("lit");
+                r.path.classList.add(held ? "pinned" : "lit");
                 [r.from, r.to].forEach(function (n) {
                   var el = flow.querySelector('[data-node="' + cssEscape(n) + '"]');
                   if (el) el.classList.add("lit");
                 });
               });
+              var anchor = flow.querySelector('[data-node="' + cssEscape(id) + '"]');
+              if (anchor && held) anchor.classList.add("pinned");
+            }
+
+            function togglePin(id) {
+              pinned = pinned === id ? null : id;
+              show();
             }
 
             Array.prototype.forEach.call(flow.querySelectorAll("li[data-node]"), function (li) {
               var id = li.getAttribute("data-node");
-              li.addEventListener("mouseenter", function () { trace(id); });
-              li.addEventListener("mouseleave", function () { trace(null); });
-              li.addEventListener("focus", function () { trace(id); });
-              li.addEventListener("blur", function () { trace(null); });
+              li.addEventListener("mouseenter", function () { hovered = id; show(); });
+              li.addEventListener("mouseleave", function () { hovered = null; show(); });
+              li.addEventListener("focus", function () { hovered = id; show(); });
+              li.addEventListener("blur", function () { hovered = null; show(); });
+              li.addEventListener("click", function () { togglePin(id); });
+              li.addEventListener("keydown", function (e) {
+                // Enter and Space are what a focused control is expected to answer to; without
+                // this the pin would be mouse-only while the trace itself is not.
+                if (e.key === "Enter" || e.key === " " || e.key === "Spacebar") {
+                  e.preventDefault();
+                  togglePin(id);
+                }
+              });
+            });
+
+            // Clicking the empty space around the diagram clears the pin, which is the gesture
+            // people try before they look for a way to undo it.
+            flow.addEventListener("click", function (e) {
+              if (!e.target.closest("li[data-node]")) { pinned = null; show(); }
+            });
+
+            // On the document, not the section: a keydown lands on whatever has focus and bubbles
+            // up from there, so a listener on the section only ever hears it when focus happens to
+            // be inside that section. Clicking a node does focus it, so this mostly worked - which
+            // is the worst kind of not working.
+            document.addEventListener("keydown", function (e) {
+              if (e.key === "Escape" && pinned) { pinned = null; show(); }
             });
 
             return draw;
